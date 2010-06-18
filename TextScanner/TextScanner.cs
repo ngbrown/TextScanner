@@ -6,6 +6,7 @@
     using System.Globalization;
     using System.IO;
     using System.Text;
+    using System.Text.RegularExpressions;
 
     /// <summary>
     /// <p>
@@ -38,7 +39,9 @@
 
         private CultureInfo culture;
 
-        private string nextString;
+        private Regex delimiter;
+
+        private string nextToken;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TextScanner"/> class 
@@ -54,10 +57,29 @@
             this.Reset();
         }
 
+        /// <summary>
+        /// Gets or sets the scanner's culture.
+        /// </summary>
+        /// <remarks>
+        /// A scanner's culture affects many elements of its default primitive 
+        /// matching regular expressions; see localized numbers above.
+        /// </remarks>
+        /// <value>The scanner's culture.</value>
         public CultureInfo Culture 
         { 
             get { return this.culture; }
             protected set { this.culture = value; }
+        }
+
+        /// <summary>
+        /// Gets or sets the <see cref="Regex"/> this <see cref="TextScanner"/>
+        /// is currently using to match delimiters.
+        /// </summary>
+        /// <value>The scanners delimiting pattern.</value>
+        public Regex Delimiter
+        {
+            get { return this.delimiter; }
+            protected set { this.delimiter = value; }
         }
 
         /// <summary>
@@ -123,6 +145,10 @@
         {
             this.culture = CultureInfo.CurrentUICulture;
 
+            // matches any \s white space character plus the no-break space (U+00A0).
+            // see http://msdn.microsoft.com/en-us/library/20bw873z.aspx#WhitespaceCharacter
+            this.delimiter = new Regex(@"[\s\xA0]");
+
             return this;
         }
 
@@ -134,7 +160,7 @@
         /// <returns>true if and only if this scanner has another token</returns>
         public bool HasNext()
         {
-            string s = this.PeekNextString();
+            string s = this.PeekNextToken();
 
             return s != null;
         }
@@ -150,22 +176,22 @@
         public string Next()
         {
             string value;
-            if (this.nextString != null)
+            if (this.nextToken != null)
             {
-                value = this.nextString;
-                this.nextString = null;
+                value = this.nextToken;
+                this.nextToken = null;
                 return value;
             }
 
-            this.ReadNextWord();
+            this.ReadNextToken();
 
-            if (this.nextString == null)
+            if (this.nextToken == null)
             {
                 throw new EndOfStreamException();
             }
 
-            value = this.nextString;
-            this.nextString = null;
+            value = this.nextToken;
+            this.nextToken = null;
             return value;
         }
 
@@ -191,7 +217,7 @@
         /// <returns>true if and only if this scanner's next token is a valid double value</returns>
         public bool HasNextDouble()
         {
-            string s = this.PeekNextString();
+            string s = this.PeekNextToken();
 
             if (s == null)
             {
@@ -215,15 +241,17 @@
         /// <returns>the <see cref="double"/> scanned from the input</returns>
         public double NextDouble()
         {
-            string s = this.PeekNextString();
+            string s = this.PeekNextToken();
 
             if (s == null)
             {
                 throw new EndOfStreamException();
             }
 
-            double value = double.Parse(this.nextString, NumberStyles.Number, this.Culture);
-            this.nextString = null;
+            double value = double.Parse(this.nextToken, NumberStyles.Number, this.Culture);
+
+            // if the parsing throws an exception, don't advance.
+            this.nextToken = null;
             return value;
         }
 
@@ -242,7 +270,7 @@
             this.textReader.Dispose();
         }
 
-        private void ReadNextWord()
+        private void ReadNextToken()
         {
             StringBuilder sb = new StringBuilder();
 
@@ -255,7 +283,7 @@
                 }
 
                 char nextChar = (char)next;
-                if (char.IsWhiteSpace(nextChar))
+                if (this.Delimiter.IsMatch(nextChar.ToString()))
                 {
                     break;
                 }
@@ -264,32 +292,60 @@
             } 
             while (true);
 
-            while ((this.textReader.Peek() >= 0) && 
-                   char.IsWhiteSpace((char)this.textReader.Peek()))
+            while ((this.textReader.Peek() >= 0) &&
+                   this.Delimiter.IsMatch(((char)this.textReader.Peek()).ToString()))
             {
                 this.textReader.Read();
             }
 
             if (sb.Length > 0)
             {
-                this.nextString = sb.ToString();
+                this.nextToken = sb.ToString();
             }
             else
             {
-                this.nextString = null;
+                this.nextToken = null;
             }
         }
 
-        private string PeekNextString()
+        private string PeekNextToken()
         {
-            if (this.nextString != null)
+            if (this.nextToken != null)
             {
-                return this.nextString;
+                return this.nextToken;
             }
 
-            this.ReadNextWord();
+            this.ReadNextToken();
 
-            return this.nextString;
+            return this.nextToken;
+        }
+
+        /// <summary>
+        /// Sets this scanner's delimiting regular expression to a <see cref="Regex"/> constructed from the specified <see cref="string"/>.
+        /// </summary>
+        /// <remarks>
+        /// An invocation of this method of the form <c>UseDelimiter(pattern)</c> behaves in exactly
+        /// the same way as the invocation <c>UseDelimiter(new Regex(pattern))</c>
+        /// <p/>
+        /// Invaking the <see cref="Reset"/> method will set the scanner's delimiter to the default.
+        /// </remarks>
+        /// <param name="pattern">A string specifing a delimiting regular expression</param>
+        /// <returns>this scanner</returns>
+        public TextScanner UseDelimiter(string pattern)
+        {
+            this.Delimiter = new Regex(pattern);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the scanner's delimiting regular expression to the specified regular expression.
+        /// </summary>
+        /// <param name="pattern">A delimiting regular expression</param>
+        /// <returns>this scanner</returns>
+        public TextScanner UseDelimiter(Regex pattern)
+        {
+            this.Delimiter = pattern;
+            return this;
         }
     }
 }

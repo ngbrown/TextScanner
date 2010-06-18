@@ -80,6 +80,48 @@ sea.
             Assert.That(output.ToString(), Is.EqualTo(ExpectedString));
         }
 
+        [Test]
+        public void CanUseRegularExpressionsOnInput()
+        {
+            var output = new List<string>();
+
+            TextScanner s = null;
+
+            try
+            {
+                s = new TextScanner(new StreamReader("xanadu.txt"));
+                s.UseDelimiter(",\\s*");
+
+                int count = 0;
+                while (s.HasNext())
+                {
+                    output.Add(s.Next());
+
+                    Assert.That(count++ < 100);
+                }
+            }
+            finally
+            {
+                if (s != null)
+                {
+                    s.Dispose();
+                }
+            }
+
+            var expectedStrings = new[]
+{
+@"In Xanadu did Kubla Khan
+A stately pleasure-dome decree:
+Where Alph", 
+@" the sacred river",
+@" ran
+Through caverns measureless to man
+Down to a sunless sea.
+"
+};
+            Assert.That(output, Is.EquivalentTo(expectedStrings));
+        }
+
         /// <summary>
         /// <see cref="TextScanner"/> also supports tokens for all of the 
         /// language's primitive types (except for char), as well as 
