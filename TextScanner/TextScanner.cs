@@ -369,8 +369,7 @@
         /// <returns>this scanner</returns>
         public TextScanner UseDelimiter(string pattern)
         {
-            this.Delimiter = new Regex(pattern);
-            return this;
+            return this.UseDelimiter(new Regex(pattern));
         }
 
         /// <summary>
@@ -382,6 +381,71 @@
         {
             this.Delimiter = pattern;
             return this;
+        }
+
+        /// <summary>
+        /// Returns true if there is another line in the input of this scanner.
+        /// This input may block while waiting for input.  The scanner does not 
+        /// advance past any input.
+        /// </summary>
+        /// <returns>
+        /// <c>true</c> if and only iff this scanner has another line of input
+        /// </returns>
+        public bool HasNextLine()
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Advances this scanner past the current line and returns the input
+        /// that was skipped.  This method returns the rest of the current line,
+        /// excluding any line separator at the end.  The position is set to the
+        /// beginning of the next line.
+        /// </summary>
+        /// <remarks>
+        /// Since this method continues to seach through the input looking for a 
+        /// line separator, it may buffer all of the input searching for the
+        /// line to skip if no line separators are present.
+        /// </remarks>
+        /// <returns>the line that was skipped.</returns>
+        public string NextLine()
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Attempts to find the next occurrence of a regular expression constructed from
+        /// the specified string, ignoring delimiters.
+        /// </summary>
+        /// <remarks>
+        /// An invocation of this method of the form <c>FindInLine(pattern)</c>
+        /// behaves in exactly the same way as the invocation <c>FindInLine(new Regex(pattern))</c>.
+        /// </remarks>
+        /// <param name="pattern">a string specifying the regular expression to search for.</param>
+        /// <returns>the text that matched the specified regular expression</returns>
+        public string FindInLine(string pattern)
+        {
+            return this.FindInLine(new Regex(pattern));
+        }
+
+        /// <summary>
+        /// Attempts to find the next occurrence of the specified regular expression,
+        /// ignoring delimiters.  If the pattern is found before the next line separator,
+        /// the scanner advances past the input that matched and returns the string that
+        /// matched the pattern.  If no such pattern is detected in the input up to the
+        /// next line separator, then <c>null</c> is returned and the scanner's position
+        /// is unchanged.  This method may block waiting for input that matches the pattern.
+        /// </summary>
+        /// <remarks>
+        /// Since this method continues to seach through the input looking for the specified
+        /// pattern, it may buffer all of the input searching for the desired token if no
+        /// line separators are present.
+        /// </remarks>
+        /// <param name="pattern">the regular expression to scan for</param>
+        /// <returns>the text that matched the specified regular expression</returns>
+        public string FindInLine(Regex pattern)
+        {
+            throw new NotImplementedException();
         }
 
         private void ReadNextToken()
@@ -522,41 +586,6 @@
             // if the parsing throws an exception, don't advance.
             this.nextToken = null;
             return value;
-        }
-
-        /// <summary>
-        /// Attempts to find the next occurrence of the specified regular expression,
-        /// ignoring delimiters.  If the pattern is found before the next line separator,
-        /// the scanner advances past the input that matched and returns the string that
-        /// matched the pattern.  If no such pattern is detected in the input up to the
-        /// next line separator, then <c>null</c> is returned and the scanner's position
-        /// is unchanged.  This method may block waiting for input that matches the pattern.
-        /// </summary>
-        /// <remarks>
-        /// Since this method continues to seach through the input looking for the specified
-        /// pattern, it may buffer all of the input searching for the desired token if no
-        /// line separators are present.
-        /// </remarks>
-        /// <param name="pattern">the regular expression to scan for</param>
-        /// <returns>the text that matched the specified regular expression</returns>
-        public string FindInLine(Regex pattern)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Attempts to find the next occurrence of a regular expression constructed from
-        /// the specified string, ignoring delimiters.
-        /// </summary>
-        /// <remarks>
-        /// An invocation of this method of the form <c>FindInLine(pattern)</c>
-        /// behaves in exactly the same way as the invocation <c>FindInLine(new Regex(pattern))</c>.
-        /// </remarks>
-        /// <param name="pattern">a string specifying the regular expression to search for.</param>
-        /// <returns>the text that matched the specified regular expression</returns>
-        public string FindInLine(string pattern)
-        {
-            return this.FindInLine(new Regex(pattern));
         }
     }
 }

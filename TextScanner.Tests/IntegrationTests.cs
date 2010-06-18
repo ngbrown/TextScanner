@@ -259,6 +259,18 @@ Down to a sunless sea.
             }
         }
 
+        [Test]
+        public void CanSkipLines()
+        {
+            Assert.Fail();
+        }
+
+        [Test]
+        public void CanTryToSkipLineAndResumeProcessing()
+        {
+            Assert.Fail();
+        }
+
         private static void ScannerEquivalentTest<T>(
             TextScanner s, IEnumerable<T> expected, Func<bool> hasNextFunc, Func<T> nextFunc)
         {
