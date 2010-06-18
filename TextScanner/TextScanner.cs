@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.Globalization;
     using System.IO;
+    using System.Security.AccessControl;
     using System.Text;
     using System.Text.RegularExpressions;
 
@@ -33,15 +34,17 @@
     /// culture reardleses of whether it was previously changed.</p>
     /// <p>Ported from http://java.sun.com/javase/7/docs/api/java/util/Scanner.html</p>
     /// </remarks>
-    public class TextScanner : IDisposable, IEnumerator<string>
+    public class TextScanner : IDisposable, IEnumerable<string>
     {
-        private readonly TextReader textReader;
+        private TextReader textReader;
 
         private CultureInfo culture;
 
         private Regex delimiter;
 
         private string nextToken;
+
+        private int position;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TextScanner"/> class 
@@ -55,6 +58,39 @@
             this.textReader = textReader;
 
             this.Reset();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TextScanner"/> class
+        /// that produces values scanned from the specified file.
+        /// The default encoding is used.
+        /// </summary>
+        /// <param name="source">A file to be scanned.</param>
+        public TextScanner(FileInfo source)
+            : this(new StreamReader(source.FullName))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TextScanner"/> class
+        /// that produces values scanned from the specified file, with the
+        /// specified character encoding.
+        /// </summary>
+        /// <param name="source">A file to be scanned.</param>
+        /// <param name="encoding">The character encoding to use.</param>
+        public TextScanner(FileInfo source, Encoding encoding)
+            : this(new StreamReader(source.FullName, encoding))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TextScanner"/> class
+        /// that produces values scanned from the specified string.
+        /// </summary>
+        /// <param name="source">A string to scan</param>
+        public TextScanner(string source)
+            : this(new StringReader(source))
+        {
         }
 
         /// <summary>
@@ -83,53 +119,95 @@
         }
 
         /// <summary>
-        /// Gets the element in the collection at the current position of the enumerator.
+        /// Returns an enumerator that iterates through the collection.
         /// </summary>
         /// <returns>
-        /// The element in the collection at the current position of the enumerator.
+        /// A <see cref="T:System.Collections.Generic.IEnumerator`1"/> that can be used to iterate through the collection.
         /// </returns>
-        string IEnumerator<string>.Current
+        IEnumerator<string> IEnumerable<string>.GetEnumerator()
         {
-            get
+            while (this.HasNext())
             {
-                throw new NotImplementedException();
+                yield return this.Next();
             }
         }
 
         /// <summary>
-        /// Gets the current element in the collection.
+        /// Returns a <see cref="System.String"/> that represents this instance.
         /// </summary>
         /// <returns>
-        /// The current element in the collection.
+        /// A <see cref="System.String"/> that represents this instance.
         /// </returns>
-        /// <exception cref="T:System.InvalidOperationException">The enumerator is positioned before the first element of the collection or after the last element.
-        /// </exception>
-        object IEnumerator.Current
+        public override string ToString()
         {
-            get { return (this as IEnumerator<string>).Current; }
+            return base.ToString() +
+                   "[delimiters=" + this.Delimiter + "]" +
+                   "[position=" + this.position + "]" +
+                   "[match valid=" + (this.nextToken != null) + "]" +
+                   "[need input=" + "]" +
+                   "[source closed=" + (this.textReader == null) + "]" +
+                   "[skipped=" + "]" +
+                   "[group separator=" + "]" +
+                   "[decimal separator=" + "]" +
+                   "[positive prefix=" + "]" +
+                   "[negative prefix=" + "]" +
+                   "[positive suffix=" + "]" +
+                   "[negative suffix=" + "]" +
+                   "[NaN string=" + "]" +
+                   "[infinity string=" + "]";
         }
 
         /// <summary>
-        /// Advances the enumerator to the next element of the collection.
+        /// Returns an enumerator that iterates through a collection.
         /// </summary>
         /// <returns>
-        /// true if the enumerator was successfully advanced to the next element; false if the enumerator has passed the end of the collection.
+        /// An <see cref="T:System.Collections.IEnumerator"/> object that can be used to iterate through the collection.
         /// </returns>
-        /// <exception cref="T:System.InvalidOperationException">The collection was modified after the enumerator was created. 
-        /// </exception>
-        bool IEnumerator.MoveNext()
+        IEnumerator IEnumerable.GetEnumerator()
         {
-            throw new NotImplementedException();
+            return ((IEnumerable<string>)this).GetEnumerator();
         }
 
         /// <summary>
-        /// Sets the enumerator to its initial position, which is before the first element in the collection.
+        /// Closes this scanner.
         /// </summary>
-        /// <exception cref="T:System.InvalidOperationException">The collection was modified after the enumerator was created. 
-        /// </exception>
-        void IEnumerator.Reset()
+        /// <remarks>
+        /// If this scanner has not yet been closed then if its underlying 
+        /// <see cref="TextReader"/> also implements the <see cref="IDisposable"/>
+        /// interface, then the TextReader's Dispose method will be invoked.
+        /// If this scanner is already disposed then invoking this method will
+        /// have no effect.
+        /// </remarks>
+        void IDisposable.Dispose()
         {
-            throw new InvalidOperationException("Unable to Reset.");
+            if (this.textReader != null)
+            {
+                this.textReader.Dispose();
+            }
+
+            this.textReader = null;
+
+            this.Delimiter = null;
+            this.culture = null;
+            this.nextToken = null;
+        }
+
+        /// <summary>
+        /// Closes this scanner.
+        /// </summary>
+        /// <remarks>
+        /// If this scanner has not yet been closed then if its underlying 
+        /// <see cref="TextReader"/> also implements the <see cref="IDisposable"/>
+        /// interface, then the TextReader's Dispose method will be invoked.
+        /// If this scanner is already disposed then invoking this method will
+        /// have no effect.
+        /// <p/>
+        /// Attempting to perform search operations after a scanner has been
+        /// closed will result in an Exception.
+        /// </remarks>
+        public void Close()
+        {
+            ((IDisposable)this).Dispose();
         }
 
         /// <summary>
@@ -143,13 +221,10 @@
         /// <returns>this scanner</returns>
         public TextScanner Reset()
         {
-            this.culture = CultureInfo.CurrentUICulture;
-
             // matches any \s white space character plus the no-break space (U+00A0).
             // see http://msdn.microsoft.com/en-us/library/20bw873z.aspx#WhitespaceCharacter
-            this.delimiter = new Regex(@"[\s\xA0]");
-
-            return this;
+            return this.UseDelimiter(@"[\s\xA0]+")
+                       .UseCulture(CultureInfo.CurrentUICulture);
         }
 
         /// <summary>
@@ -187,26 +262,12 @@
 
             if (this.nextToken == null)
             {
-                throw new EndOfStreamException();
+                throw new InvalidOperationException();
             }
 
             value = this.nextToken;
             this.nextToken = null;
             return value;
-        }
-
-        /// <summary>
-        /// Sets this scanner's culture to the specified culture.
-        /// </summary>
-        /// <param name="cultureInfo">The culture info.</param>
-        public void UseCulture(CultureInfo cultureInfo)
-        {
-            if (cultureInfo == null)
-            {
-                throw new ArgumentNullException("cultureInfo");
-            }
-
-            this.Culture = cultureInfo;
         }
 
         /// <summary>
@@ -256,68 +317,19 @@
         }
 
         /// <summary>
-        /// Closes this scanner.
+        /// Sets this scanner's culture to the specified culture.
         /// </summary>
-        /// <remarks>
-        /// If this scanner has not yet been closed then if its underlying 
-        /// <see cref="TextReader"/> also implements the <see cref="IDisposable"/>
-        /// interface, then the TextReader's Dispose method will be invoked.
-        /// If this scanner is already disposed then invoking this method will
-        /// have no effect.
-        /// </remarks>
-        public void Dispose()
+        /// <param name="cultureInfo">The culture info.</param>
+        public TextScanner UseCulture(CultureInfo cultureInfo)
         {
-            this.textReader.Dispose();
-        }
-
-        private void ReadNextToken()
-        {
-            StringBuilder sb = new StringBuilder();
-
-            do
+            if (cultureInfo == null)
             {
-                int next = this.textReader.Read();
-                if (next < 0)
-                {
-                    break;
-                }
-
-                char nextChar = (char)next;
-                if (this.Delimiter.IsMatch(nextChar.ToString()))
-                {
-                    break;
-                }
-
-                sb.Append(nextChar);
-            } 
-            while (true);
-
-            while ((this.textReader.Peek() >= 0) &&
-                   this.Delimiter.IsMatch(((char)this.textReader.Peek()).ToString()))
-            {
-                this.textReader.Read();
+                throw new ArgumentNullException("cultureInfo");
             }
 
-            if (sb.Length > 0)
-            {
-                this.nextToken = sb.ToString();
-            }
-            else
-            {
-                this.nextToken = null;
-            }
-        }
+            this.Culture = cultureInfo;
 
-        private string PeekNextToken()
-        {
-            if (this.nextToken != null)
-            {
-                return this.nextToken;
-            }
-
-            this.ReadNextToken();
-
-            return this.nextToken;
+            return this;
         }
 
         /// <summary>
@@ -346,6 +358,90 @@
         {
             this.Delimiter = pattern;
             return this;
+        }
+
+        private void ReadNextToken()
+        {
+            StringBuilder sb = new StringBuilder();
+            string completedToken;
+
+            // read in characters until we have a match on our delimiter
+            do
+            {
+                int next = this.textReader.Read();
+                this.position++;
+                if (next < 0)
+                {
+                    // end of the input
+                    // return a null if we hadn't scanned anything yet
+                    completedToken = sb.Length > 0 ? sb.ToString() : null;
+                    break;
+                }
+
+                char nextChar = (char)next;
+                sb.Append(nextChar);
+
+                // do we have a match yet?
+                Match match = this.Delimiter.Match(sb.ToString());
+                if (match.Success)
+                {
+                    // we have started matching a delimiter
+                    // our token is just before the delimiter starts.
+                    completedToken = sb.ToString(0, match.Index);
+                    break;
+                }
+            } 
+            while (true);
+
+            if (completedToken == null)
+            {
+                this.nextToken = null;
+                return;
+            }
+
+            // Strip the token from our StringBuilder
+            sb.Remove(0, completedToken.Length);
+
+            // scan ahead through the delimiter until it's consumed
+            do
+            {
+                int peek = this.textReader.Peek();
+                if (peek < 0)
+                {
+                    // end of input
+                    break;
+                }
+
+                char nextChar = (char)peek;
+                sb.Append(nextChar);
+
+                // have we stopped matching yet?
+                Match match = this.Delimiter.Match(sb.ToString());
+                if (match.Length != sb.Length)
+                {
+                    // end of capture
+                    break;
+                }
+
+                // consume the character
+                this.textReader.Read();
+                this.position++;
+            }
+            while (true);
+
+            this.nextToken = completedToken;
+        }
+
+        private string PeekNextToken()
+        {
+            if (this.nextToken != null)
+            {
+                return this.nextToken;
+            }
+
+            this.ReadNextToken();
+
+            return this.nextToken;
         }
     }
 }

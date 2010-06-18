@@ -26,100 +26,120 @@
         [Test]
         public void CanBreakInputIntoTokens()
         {
-            StringBuilder output = new StringBuilder();
-
-            TextScanner s = null;
-
-            try
+            var expectedStrings = new[]
+{
+@"In",
+@"Xanadu",
+@"did",
+@"Kubla",
+@"Khan",
+@"A",
+@"stately",
+@"pleasure-dome",
+@"decree:",
+@"Where",
+@"Alph,",
+@"the",
+@"sacred",
+@"river,",
+@"ran",
+@"Through",
+@"caverns",
+@"measureless",
+@"to",
+@"man",
+@"Down",
+@"to",
+@"a",
+@"sunless",
+@"sea."
+};
+            using (var s = new TextScanner(new StreamReader("xanadu.txt")))
             {
-                s = new TextScanner(new StreamReader("xanadu.txt"));
-
-                int count = 0;
-                while (s.HasNext())
-                {
-                    output.AppendLine(s.Next());
-
-                    Assert.That(count++ < 100);
-                }
+                ScannerEquivalentTest(s, expectedStrings);
             }
-            finally
-            {
-                if (s != null)
-                {
-                    s.Dispose();
-                }
-            }
-
-            const string ExpectedString =
-@"In
-Xanadu
-did
-Kubla
-Khan
-A
-stately
-pleasure-dome
-decree:
-Where
-Alph,
-the
-sacred
-river,
-ran
-Through
-caverns
-measureless
-to
-man
-Down
-to
-a
-sunless
-sea.
-";
-            Assert.That(output.ToString(), Is.EqualTo(ExpectedString));
         }
 
         [Test]
         public void CanUseRegularExpressionsOnInput()
         {
-            var output = new List<string>();
-
-            TextScanner s = null;
-
-            try
-            {
-                s = new TextScanner(new StreamReader("xanadu.txt"));
-                s.UseDelimiter(",\\s*");
-
-                int count = 0;
-                while (s.HasNext())
-                {
-                    output.Add(s.Next());
-
-                    Assert.That(count++ < 100);
-                }
-            }
-            finally
-            {
-                if (s != null)
-                {
-                    s.Dispose();
-                }
-            }
-
             var expectedStrings = new[]
 {
 @"In Xanadu did Kubla Khan
 A stately pleasure-dome decree:
-Where Alph", 
-@" the sacred river",
-@" ran
+Where Alph",
+@"the sacred river",
+@"ran
 Through caverns measureless to man
 Down to a sunless sea.
 "
 };
-            Assert.That(output, Is.EquivalentTo(expectedStrings));
+
+            using (var s = 
+                new TextScanner(new StreamReader("xanadu.txt"))
+                    .UseDelimiter(",\\s"))
+            {
+                ScannerEquivalentTest(s, expectedStrings);
+            }
+        }
+
+        [Test]
+        public void CanConsumeExtraSpaces()
+        {
+            var expectedStrings = new[]
+{
+@"string",
+@"with",
+@"extra",
+@"spaces",
+};
+            
+            using (var s =
+                new TextScanner("string with  extra spaces ")
+                    .UseDelimiter("\\s+"))
+            {
+                ScannerEquivalentTest(s, expectedStrings);
+            }
+        }
+
+        [Test]
+        public void CanReturnEmptyStrings()
+        {
+            var expectedStrings = new[]
+{
+@"string",
+@"with",
+@"",
+@"extra",
+@"spaces",
+};
+            
+            using (var s =
+                new TextScanner("string with  extra spaces ")
+                    .UseDelimiter("\\s"))
+            {
+                ScannerEquivalentTest(s, expectedStrings);
+            }
+        }
+
+        [Test]
+        public void CanUseRegularExpressionsWithWordsOnInputString()
+        {
+            var expectedStrings = new[]
+{
+@"1", 
+@"2",
+@"red",
+@"blue"
+};
+
+            string input = "1 fish 2 fish red fish blue fish";
+            using (var s = 
+                new TextScanner(input)
+                    .UseDelimiter("\\s*fish\\s*"))
+            {
+                ScannerEquivalentTest(s, expectedStrings);
+            }
         }
 
         /// <summary>
@@ -138,12 +158,10 @@ Down to a sunless sea.
         [Test]
         public void CanTranslateIndividualTokens()
         {
-            TextScanner s = null;
             double sum = 0;
 
-            try
+            using (var s = new TextScanner(new StreamReader("usnumbers.txt")))
             {
-                s = new TextScanner(new StreamReader("usnumbers.txt"));
                 s.UseCulture(new CultureInfo("en-US"));
 
                 int count = 0;
@@ -162,15 +180,44 @@ Down to a sunless sea.
                     Assert.That(count++ < 100);
                 }
             }
-            finally
+
+            Assert.That(sum, Is.EqualTo(1032778.74159));
+        }
+
+        [Test]
+        public void CanIterate()
+        {
+            var expectedStrings = new[] { @"1", @"2", @"red", @"blue" };
+            string input = "1 fish 2 fish red fish blue fish";
+            var output = new List<string>();
+
+            using (var s =
+                new TextScanner(input)
+                    .UseDelimiter("\\s*fish\\s*"))
             {
-                if (s != null)
+                foreach (var token in s)
                 {
-                    s.Dispose();
+                    output.Add(token);
                 }
             }
 
-            Assert.That(sum, Is.EqualTo(1032778.74159));
+            Assert.That(output, Is.EquivalentTo(expectedStrings));
+        }
+
+        private static void ScannerEquivalentTest(
+            TextScanner s, IEnumerable<string> expectedStrings)
+        {
+            var output = new List<string>();
+
+            int count = 0;
+            while (s.HasNext())
+            {
+                output.Add(s.Next());
+
+                Assert.That(count++ < 100);
+            }
+
+            Assert.That(output, Is.EquivalentTo(expectedStrings));
         }
     }
 }
