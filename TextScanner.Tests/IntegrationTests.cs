@@ -8,6 +8,7 @@
     using System.Text;
 
     using NUnit.Framework;
+    using System.Text.RegularExpressions;
 
     [TestFixture]
     public class IntegrationTests
@@ -56,7 +57,7 @@
 };
             using (var s = new TextScanner(new StreamReader("xanadu.txt")))
             {
-                ScannerEquivalentTest(s, expectedStrings);
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
             }
         }
 
@@ -79,7 +80,7 @@ Down to a sunless sea.
                 new TextScanner(new StreamReader("xanadu.txt"))
                     .UseDelimiter(",\\s"))
             {
-                ScannerEquivalentTest(s, expectedStrings);
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
             }
         }
 
@@ -98,7 +99,7 @@ Down to a sunless sea.
                 new TextScanner("string with  extra spaces ")
                     .UseDelimiter("\\s+"))
             {
-                ScannerEquivalentTest(s, expectedStrings);
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
             }
         }
 
@@ -118,7 +119,7 @@ Down to a sunless sea.
                 new TextScanner("string with  extra spaces ")
                     .UseDelimiter("\\s"))
             {
-                ScannerEquivalentTest(s, expectedStrings);
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
             }
         }
 
@@ -138,7 +139,7 @@ Down to a sunless sea.
                 new TextScanner(input)
                     .UseDelimiter("\\s*fish\\s*"))
             {
-                ScannerEquivalentTest(s, expectedStrings);
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
             }
         }
 
@@ -204,20 +205,74 @@ Down to a sunless sea.
             Assert.That(output, Is.EquivalentTo(expectedStrings));
         }
 
-        private static void ScannerEquivalentTest(
-            TextScanner s, IEnumerable<string> expectedStrings)
+        [Test]
+        public void CanReadIntegers()
         {
-            var output = new List<string>();
+            var input = "1   3 53\t-1\r\n0";
+            var expected = new[] { 1, 3, 53, -1, 0 };
+
+            using (var s = new TextScanner(input))
+            {
+                ScannerEquivalentTest(s, expected, s.HasNextInt, s.NextInt);
+            }
+        }
+
+        [Test]
+        public void DoesntConsumeSpacesAtBeginning()
+        {
+            var expectedStrings = new[]
+{
+@"",
+@"string",
+@"with",
+@"extra",
+@"spaces",
+};
+
+            using (var s =
+                new TextScanner(" string with  extra spaces ")
+                    .UseDelimiter("\\s+"))
+            {
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
+            }
+        }
+
+        [Test]
+        public void CanFindInLine()
+        {
+            var expectedStrings = new[]
+{
+@"1", 
+@"2",
+@"red",
+@"blue"
+};
+
+            string input = "1 fish 2 fish red fish blue fish";
+            using (var s = new TextScanner(input))
+            {
+                s.FindInLine("(\\d+) fish (\\d+) fish (\\w+) fish (\\w+)");
+                Match match = s.Match;
+
+                Assert.That(match.Groups.Cast<string>(), Is.EquivalentTo(expectedStrings));
+                ScannerEquivalentTest(s, expectedStrings, s.HasNext, s.Next);
+            }
+        }
+
+        private static void ScannerEquivalentTest<T>(
+            TextScanner s, IEnumerable<T> expected, Func<bool> hasNextFunc, Func<T> nextFunc)
+        {
+            var output = new List<T>();
 
             int count = 0;
-            while (s.HasNext())
+            while (hasNextFunc.Invoke())
             {
-                output.Add(s.Next());
+                output.Add(nextFunc.Invoke());
 
-                Assert.That(count++ < 100);
+                Assert.That(count++ < 1000, "Took over 1000 cycles, probably means it's stuck.");
             }
 
-            Assert.That(output, Is.EquivalentTo(expectedStrings));
+            Assert.That(output, Is.EquivalentTo(expected));
         }
     }
 }

@@ -46,6 +46,8 @@
 
         private int position;
 
+        private Match match;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="TextScanner"/> class 
         /// that produces values scanned from the specified source.
@@ -93,6 +95,10 @@
         {
         }
 
+        private delegate TResult ParseDelegate<TResult>(string s, NumberStyles style, IFormatProvider provider);
+
+        private delegate bool TryParseDelegate<TResult>(string s, NumberStyles style, IFormatProvider provider, out TResult result);
+
         /// <summary>
         /// Gets or sets the scanner's culture.
         /// </summary>
@@ -116,6 +122,33 @@
         {
             get { return this.delimiter; }
             protected set { this.delimiter = value; }
+        }
+
+        /// <summary>
+        /// Gets the match result of the last scanning operation performed by 
+        /// this scanner.
+        /// </summary>
+        /// <remarks>
+        /// The various <c>next</c>methods of <see cref="TextScanner"/> make a 
+        /// match result available if they complete without throwing an exception.
+        /// for instance, after an invorcation of the <see cref="NextInt"/> method
+        /// that returned an int, this method returns a <see cref="Match"/> for
+        /// the search of the <see cref="int"/> regular expression defined above.
+        /// Similarly the <see cref="FindInLine"/>, <see cref="FindWithinHorizon"/>,
+        /// and <see cref="Skip"/> methods will make a match available if they succeed.
+        /// </remarks>
+        /// <value>a match result for the last match operation.</value>
+        public Match Match
+        {
+            get
+            {
+                if (this.match == null)
+                {
+                    throw new InvalidOperationException();
+                }
+
+                return this.match;
+            }
         }
 
         /// <summary>
@@ -278,15 +311,7 @@
         /// <returns>true if and only if this scanner's next token is a valid double value</returns>
         public bool HasNextDouble()
         {
-            string s = this.PeekNextToken();
-
-            if (s == null)
-            {
-                return false;
-            }
-
-            double dummy;
-            return double.TryParse(s, NumberStyles.Number, this.Culture, out dummy);
+            return this.HasNext<double>(double.TryParse);
         }
 
         /// <summary>
@@ -302,18 +327,17 @@
         /// <returns>the <see cref="double"/> scanned from the input</returns>
         public double NextDouble()
         {
-            string s = this.PeekNextToken();
+            return this.Next<double>(double.Parse);
+        }
 
-            if (s == null)
-            {
-                throw new EndOfStreamException();
-            }
+        public bool HasNextInt()
+        {
+            return this.HasNext<int>(int.TryParse);
+        }
 
-            double value = double.Parse(this.nextToken, NumberStyles.Number, this.Culture);
-
-            // if the parsing throws an exception, don't advance.
-            this.nextToken = null;
-            return value;
+        public int NextInt()
+        {
+            return this.Next<int>(int.Parse);
         }
 
         /// <summary>
@@ -442,6 +466,97 @@
             this.ReadNextToken();
 
             return this.nextToken;
+        }
+
+        /// <summary>
+        /// Returns true if the next token in this scanner's input can be
+        /// interpreted as a value of type T using the <see cref="Next{T}"/>
+        /// method.  The scanner does not advance past any input.
+        /// </summary>
+        /// <typeparam name="T">The value type that is being parsed.  Must have a TryParse member.</typeparam>
+        /// <param name="tryParse">The <c>TryParse</c> delegate.</param>
+        /// <returns>
+        /// true if and only if this scanner's next token is a valid double value
+        /// </returns>
+        private bool HasNext<T>(TryParseDelegate<T> tryParse)
+            where T : struct
+        {
+            string s = this.PeekNextToken();
+
+            if (s == null)
+            {
+                return false;
+            }
+
+            T dummy;
+            return tryParse(s, NumberStyles.Number, this.Culture, out dummy);
+        }
+
+        /// <summary>
+        /// Scans the next token of the input as a <c>T</c>.  This
+        /// method will throw <see cref="EndOfStreamException"/> if the next
+        /// token cannot be translated into a valid double value.  If the
+        /// translation is successful, the scanner advances past the
+        /// input that matched.
+        /// </summary>
+        /// <typeparam name="T">The value type that is being parsed.  Must have a TryParse member.</typeparam>
+        /// <param name="parse">The <c>Parse</c> delegate.</param>
+        /// <returns>
+        /// the <see cref="double"/> scanned from the input
+        /// </returns>
+        /// <remarks>
+        /// If the next token matches the Float regular expression defined above then the token is converted into a double value as if by removing all locale specific prefixes, group separators, and locale specific suffixes, then mapping non-ASCII digits into ASCII digits via Character.digit, prepending a negative sign (-) if the locale specific negative prefixes and suffixes were present, and passing the resulting string to Double.parseDouble. If the token matches the localized NaN or infinity strings, then either "Nan" or "Infinity" is passed to Double.parseDouble as appropriate.
+        /// </remarks>
+        private T Next<T>(ParseDelegate<T> parse)
+            where T : struct
+        {
+            string s = this.PeekNextToken();
+
+            if (s == null)
+            {
+                throw new EndOfStreamException();
+            }
+
+            T value = parse(this.nextToken, NumberStyles.Number, this.Culture);
+
+            // if the parsing throws an exception, don't advance.
+            this.nextToken = null;
+            return value;
+        }
+
+        /// <summary>
+        /// Attempts to find the next occurrence of the specified regular expression,
+        /// ignoring delimiters.  If the pattern is found before the next line separator,
+        /// the scanner advances past the input that matched and returns the string that
+        /// matched the pattern.  If no such pattern is detected in the input up to the
+        /// next line separator, then <c>null</c> is returned and the scanner's position
+        /// is unchanged.  This method may block waiting for input that matches the pattern.
+        /// </summary>
+        /// <remarks>
+        /// Since this method continues to seach through the input looking for the specified
+        /// pattern, it may buffer all of the input searching for the desired token if no
+        /// line separators are present.
+        /// </remarks>
+        /// <param name="pattern">the regular expression to scan for</param>
+        /// <returns>the text that matched the specified regular expression</returns>
+        public string FindInLine(Regex pattern)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Attempts to find the next occurrence of a regular expression constructed from
+        /// the specified string, ignoring delimiters.
+        /// </summary>
+        /// <remarks>
+        /// An invocation of this method of the form <c>FindInLine(pattern)</c>
+        /// behaves in exactly the same way as the invocation <c>FindInLine(new Regex(pattern))</c>.
+        /// </remarks>
+        /// <param name="pattern">a string specifying the regular expression to search for.</param>
+        /// <returns>the text that matched the specified regular expression</returns>
+        public string FindInLine(string pattern)
+        {
+            return this.FindInLine(new Regex(pattern));
         }
     }
 }
