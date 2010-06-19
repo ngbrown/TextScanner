@@ -1,0 +1,159 @@
+h1. TextScanner
+
+A simple text scanner for .NET which can parse primitive types and strings using regular expressions.
+
+h2. Project Info
+
+* *Project Home*: "github.com/ngbrown/TextScanner":http://github.com/ngbrown/TextScanner
+* *Bug/Feature Tracking*: "github.com/ngbrown/TextScanner/issues":http://github.com/ngbrown/TextScanner/issues
+
+
+A @TextScanner@ breaks its input into tokens using a delimiter pattern, which by default matches whitespace. The resulting tokens may then be converted into values of different types using the various next methods.
+
+This is a port of the Java class "java.util.Scanner":http://java.sun.com/javase/7/docs/api/java/util/Scanner.html to .NET.
+
+h2. Breaking input into tokens
+
+By default, a scanner uses white space to separate tokens. (White space characters include blanks, tabs, and line terminators. For the full list, refer to the documentation for "Char.IsWhiteSpace":http://msdn.microsoft.com/en-us/library/t809ektx.aspx.) To see how scanning works, let's look at ScanXan, a program that reads the individual words in "xanadu.txt":http://java.sun.com/docs/books/tutorial/essential/io/examples/xanadu.txt and prints them out, one per line.
+
+The .NET implementation of the "Java tutorial":http://java.sun.com/docs/books/tutorial/essential/io/scanning.html would look like this:<pre><code>
+ namespace ScanXan
+ {
+    using System;
+    using System.IO;
+
+    using TextScanner;
+
+    internal class ScanXan
+    {
+        private static void Main(string[] args)
+        {
+            TextScanner s = null;
+
+            try
+            {
+                s = new TextScanner(new StreamReader("xanadu.txt"));
+
+                while (s.HasNext())
+                {
+                    Console.WriteLine(s.Next());
+                }
+            }
+            finally
+            {
+                if (s != null)
+                {
+                    s.Close();
+                }
+            }
+        }
+    }
+ }
+</code>
+</pre>
+
+The output is the same:<pre><code>
+In
+Xanadu
+did
+Kubla
+Khan
+A
+stately
+pleasure-dome
+...
+</code></pre>
+
+To use a different token separator, invoke @UseDelimiter()@, specifying a regular expression. For example, suppose you wanted the token separator to be a comma, optionally followed by white space. You would invoke, <pre><code>s.UseDelimiter(",\\s*");</code></pre>
+
+h2. Translating individual tokens
+
+The @ScanXan@ example treats all input tokens as simple @string@ values. @TextScanner@ also supports tokens for all of the .NET primitive types (except for @char@), as well as @Decimal@. Also, numeric values can use thousands separators. Thus, in a @en-US@ locale, @TextScanner@ correctly reads the string "32,767" as representing an integer value.
+
+We have to mention the locale, because thousands separators and decimal symbols are locale specific. So, the following example would not work correctly in all locales if we didn't specify that the scanner should use the @en-US@ locale. That's not something you usually have to worry about, because your input data usually comes from sources that use the same locale as you do.
+
+The @ScanSum@ example reads a list of double values and adds them up. Here's the source:<pre><code>
+ namespace ScanSum
+ {
+    using System;
+    using System.Globalization;
+    using System.IO;
+
+    using TextScanner;
+
+    internal class ScanSum
+    {
+        private static void Main(string[] args)
+        {
+            TextScanner s = null;
+            double sum = 0;
+
+            try
+            {
+                s = new TextScanner(new StreamReader("usnumbers.txt"));
+                s.UseCulture(new CultureInfo("en-US"));
+
+                while (s.HasNext())
+                {
+                    if (s.HasNextDouble())
+                    {
+                        sum += s.NextDouble();
+                    }
+                    else
+                    {
+                        s.Next();
+                    }
+                }
+            }
+            finally
+            {
+                if (s != null)
+                {
+                    s.Close();
+                }
+            }
+
+            Console.WriteLine(sum);
+        }
+    }
+ }
+</code></pre>
+
+And here's the sample input file, "usnumbers.txt":http://java.sun.com/docs/books/tutorial/essential/io/examples/usnumbers.txt
+<pre><code>
+8.5
+32,767
+3.14159
+1,000,000.1
+</code></pre>
+
+The output string is @"1032778.74159"@.
+
+h2. Updated for .NET
+
+We can rewrite the @ScanXan@ example with @using@ and @foreach@ blocks like this:
+<pre><code>
+ namespace ScanXan
+ {
+    using System;
+    using System.IO;
+
+    using TextScanner;
+
+    internal class ScanXan
+    {
+        private static void Main(string[] args)
+        {
+            using (var s = new TextScanner(new StreamReader("xanadu.txt")))
+            {
+                foreach (var token in s)
+                {
+                    Console.WriteLine(token);
+                }
+            }
+        }
+    }
+ }
+</code></pre>
+
+The output is the same as before.
