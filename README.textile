@@ -20,35 +20,35 @@ The .NET implementation of the "Java tutorial":http://java.sun.com/docs/books/tu
 
 <pre><code>namespace ScanXan
 {
-	using System;
-	using System.IO;
+    using System;
+    using System.IO;
 
-	using TextScanner;
+    using TextScanner;
 
-	internal class ScanXan
-	{
-		private static void Main(string[] args)
-		{
-			TextScanner s = null;
+    internal class ScanXan
+    {
+        private static void Main(string[] args)
+        {
+            TextScanner s = null;
 
-			try
-			{
-				s = new TextScanner(new StreamReader("xanadu.txt"));
+            try
+            {
+                s = new TextScanner(new StreamReader("xanadu.txt"));
 
-				while (s.HasNext())
-				{
-					Console.WriteLine(s.Next());
-				}
-			}
-			finally
-			{
-				if (s != null)
-				{
-					s.Close();
-				}
-			}
-		}
-	}
+                while (s.HasNext())
+                {
+                    Console.WriteLine(s.Next());
+                }
+            }
+            finally
+            {
+                if (s != null)
+                {
+                    s.Close();
+                }
+            }
+        }
+    }
 }</code></pre>
 
 The output is the same:
@@ -75,47 +75,47 @@ The @ScanSum@ example reads a list of double values and adds them up. Here's the
 
 <pre><code>namespace ScanSum
 {
-	using System;
-	using System.Globalization;
-	using System.IO;
+    using System;
+    using System.Globalization;
+    using System.IO;
 
-	using TextScanner;
+    using TextScanner;
 
-	internal class ScanSum
-	{
-		private static void Main(string[] args)
-		{
-			TextScanner s = null;
-			double sum = 0;
+    internal class ScanSum
+    {
+        private static void Main(string[] args)
+        {
+            TextScanner s = null;
+            double sum = 0;
 
-			try
-			{
-				s = new TextScanner(new StreamReader("usnumbers.txt"));
-				s.UseCulture(new CultureInfo("en-US"));
+            try
+            {
+                s = new TextScanner(new StreamReader("usnumbers.txt"));
+                s.UseCulture(new CultureInfo("en-US"));
 
-				while (s.HasNext())
-				{
-					if (s.HasNextDouble())
-					{
-						sum += s.NextDouble();
-					}
-					else
-					{
-						s.Next();
-					}
-				}
-			}
-			finally
-			{
-				if (s != null)
-				{
-					s.Close();
-				}
-			}
+                while (s.HasNext())
+                {
+                    if (s.HasNextDouble())
+                    {
+                        sum += s.NextDouble();
+                    }
+                    else
+                    {
+                        s.Next();
+                    }
+                }
+            }
+            finally
+            {
+                if (s != null)
+                {
+                    s.Close();
+                }
+            }
 
-			Console.WriteLine(sum);
-		}
-	}
+            Console.WriteLine(sum);
+        }
+    }
 }</code></pre>
 
 And here's the sample input file, "usnumbers.txt":http://java.sun.com/docs/books/tutorial/essential/io/examples/usnumbers.txt
@@ -133,24 +133,24 @@ We can rewrite the @ScanXan@ example with @using@ and @foreach@ blocks like this
 
 <pre><code>namespace ScanXan
 {
-	using System;
-	using System.IO;
+    using System;
+    using System.IO;
 
-	using TextScanner;
+    using TextScanner;
 
-	internal class ScanXan
-	{
-		private static void Main(string[] args)
-		{
-			using (var s = new TextScanner(new StreamReader("xanadu.txt")))
-			{
-				foreach (var token in s)
-				{
-					Console.WriteLine(token);
-				}
-			}
-		}
-	}
+    internal class ScanXan
+    {
+        private static void Main(string[] args)
+        {
+            using (var s = new TextScanner(new StreamReader("xanadu.txt")))
+            {
+                foreach (var token in s)
+                {
+                    Console.WriteLine(token);
+                }
+            }
+        }
+    }
 }</code></pre>
 
 The output is the same as before.
