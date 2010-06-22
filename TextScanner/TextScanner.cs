@@ -5,7 +5,6 @@
     using System.Collections.Generic;
     using System.Globalization;
     using System.IO;
-    using System.Security.AccessControl;
     using System.Text;
     using System.Text.RegularExpressions;
 
@@ -32,10 +31,17 @@
     /// via the <see cref="UseCulture"/> method.  The <see cref="Reset"/>
     /// method will reset the value of the scanner's culture to the initial
     /// culture reardleses of whether it was previously changed.</p>
-    /// <p>Ported from http://java.sun.com/javase/7/docs/api/java/util/Scanner.html</p>
+    /// <p>Ported from http://java.sun.com/javase/6/docs/api/java/util/Scanner.html</p>
     /// </remarks>
     public class TextScanner : IDisposable, IEnumerable<string>
     {
+        /// <summary>
+        /// Holds characters that we are attempting to evaluate, but we don't
+        /// know if we can move the position on.  Supports the use of
+        /// <see cref="NextLine"/> and <see cref="FindInLine(Regex)"/>.
+        /// </summary>
+        private readonly Queue<char> unconsumedChars = new Queue<char>();
+
         private TextReader textReader;
 
         private CultureInfo culture;
@@ -95,9 +101,12 @@
         {
         }
 
-        private delegate TResult ParseDelegate<TResult>(string s, NumberStyles style, IFormatProvider provider);
+        private delegate TResult ParseDelegate<TResult>(string s);
 
-        private delegate bool TryParseDelegate<TResult>(string s, NumberStyles style, IFormatProvider provider, out TResult result);
+        /// <summary>
+        /// (string s, out TResult result)
+        /// </summary>
+        private delegate bool TryParseDelegate<TResult>(string s, out TResult result);
 
         /// <summary>
         /// Gets or sets the scanner's culture.
@@ -131,7 +140,7 @@
         /// <remarks>
         /// The various <c>next</c>methods of <see cref="TextScanner"/> make a 
         /// match result available if they complete without throwing an exception.
-        /// for instance, after an invorcation of the <see cref="NextInt"/> method
+        /// for instance, after an invorcation of the <see cref="NextInt32"/> method
         /// that returned an int, this method returns a <see cref="Match"/> for
         /// the search of the <see cref="int"/> regular expression defined above.
         /// Similarly the <see cref="FindInLine"/>, <see cref="FindWithinHorizon"/>,
@@ -291,7 +300,7 @@
                 return value;
             }
 
-            this.ReadNextToken();
+            this.ReadNextToken(this.Delimiter);
 
             if (this.nextToken == null)
             {
@@ -311,12 +320,13 @@
         /// <returns>true if and only if this scanner's next token is a valid double value</returns>
         public bool HasNextDouble()
         {
-            return this.HasNext<double>(double.TryParse);
+            return this.HasNext<double>(
+                    delegate(string s, out double r) { return double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, this.Culture, out r); });
         }
 
         /// <summary>
         /// Scans the next token of the input as a <see cref="double"/>.  This
-        /// method will throw <see cref="EndOfStreamException"/> if the next
+        /// method will throw <see cref="FormatException"/> if the next
         /// token cannot be translated into a valid double value.  If the 
         /// translation is successfull, the scanner advances past the
         /// input that matched.
@@ -327,17 +337,144 @@
         /// <returns>the <see cref="double"/> scanned from the input</returns>
         public double NextDouble()
         {
-            return this.Next<double>(double.Parse);
+            return this.Next<double>(delegate(string s) { return double.Parse(s, NumberStyles.Float | NumberStyles.AllowThousands, this.Culture); });
         }
 
-        public bool HasNextInt()
+        public bool HasNextSingle()
         {
-            return this.HasNext<int>(int.TryParse);
+            return this.HasNext<float>(delegate(string s, out float r) { return float.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, this.Culture, out r); });
         }
 
-        public int NextInt()
+        public float NextSingle()
         {
-            return this.Next<int>(int.Parse);
+            return this.Next<float>(delegate(string s) { return float.Parse(s, NumberStyles.Float | NumberStyles.AllowThousands, this.Culture); });
+        }
+
+        public bool HasNextDecimal()
+        {
+            return this.HasNext<decimal>(delegate(string s, out decimal r)
+                    {
+                        return decimal.TryParse(s, NumberStyles.Number, this.Culture, out r);
+                    });
+        }
+
+        public decimal NextDecimal()
+        {
+            return this.Next<decimal>(
+                delegate(string s) { return decimal.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextInt16()
+        {
+            return this.HasNext<short>(
+                delegate(string s, out short r) { return short.TryParse(s, NumberStyles.Number, this.Culture, out r); });
+        }
+
+        public short NextInt16()
+        {
+            return this.Next<short>(
+                delegate(string s) { return short.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextInt32()
+        {
+            return this.HasNext<int>(delegate(string s, out int r)
+                {
+                    return int.TryParse(s, NumberStyles.Number, this.Culture, out r);
+                });
+        }
+
+        public int NextInt32()
+        {
+            return this.Next<int>(delegate(string s) { return int.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextInt64()
+        {
+            return this.HasNext<long>(delegate(string s, out long r) { return long.TryParse(s, NumberStyles.Number, this.Culture, out r); });
+        }
+
+        public long NextInt64()
+        {
+            return this.Next<long>(delegate(string s) { return long.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextByte()
+        {
+            return this.HasNext<byte>(delegate(string s, out byte r) { return byte.TryParse(s, NumberStyles.Integer, this.Culture, out r); });
+        }
+
+        public byte NextByte()
+        {
+            return this.Next<byte>(delegate(string s) { return byte.Parse(s, NumberStyles.Integer, this.Culture); });
+        }
+
+        public bool HasNextBoolean()
+        {
+            return this.HasNext<bool>(delegate(string s, out bool r) { return bool.TryParse(s, out r); });
+        }
+
+        public bool NextBoolean()
+        {
+            return this.Next<bool>(delegate(string s) { return bool.Parse(s); });
+        }
+
+        public bool HasNextUInt16()
+        {
+            return this.HasNext<ushort>(
+                delegate(string s, out ushort r) { return ushort.TryParse(s, NumberStyles.Number, this.Culture, out r); });
+        }
+
+        public ushort NextUInt16()
+        {
+            return this.Next<ushort>(
+                delegate(string s) { return ushort.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextUInt32()
+        {
+            return this.HasNext<uint>(delegate(string s, out uint r)
+                    {
+                        return uint.TryParse(s, NumberStyles.Number, this.Culture, out r);
+                    });
+        }
+
+        public uint NextUInt32()
+        {
+            return this.Next<uint>(delegate(string s) { return uint.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextUInt64()
+        {
+            return this.HasNext<ulong>(delegate(string s, out ulong r) { return ulong.TryParse(s, NumberStyles.Number, this.Culture, out r); });
+        }
+
+        public ulong NextUInt64()
+        {
+            return this.Next<ulong>(delegate(string s) { return ulong.Parse(s, NumberStyles.Number, this.Culture); });
+        }
+
+        public bool HasNextSByte()
+        {
+            return this.HasNext<sbyte>(delegate(string s, out sbyte r) { return sbyte.TryParse(s, NumberStyles.Integer, this.Culture, out r); });
+        }
+
+        public sbyte NextSByte()
+        {
+            return this.Next<sbyte>(delegate(string s) { return sbyte.Parse(s, NumberStyles.Integer, this.Culture); });
+        }
+
+        public bool HasNextDateTime()
+        {
+            return this.HasNext<DateTime>(delegate(string s, out DateTime r)
+                        {
+                            return DateTime.TryParse(s, this.Culture, DateTimeStyles.None, out r);
+                        });
+        }
+
+        public DateTime NextDateTime()
+        {
+            return this.Next<DateTime>(delegate(string s) { return DateTime.Parse(s, this.Culture, DateTimeStyles.None); });
         }
 
         /// <summary>
@@ -410,7 +547,68 @@
         /// <returns>the line that was skipped.</returns>
         public string NextLine()
         {
-            throw new NotImplementedException();
+            StringBuilder sb = new StringBuilder();
+            string completedLine;
+
+            // read in characters to our queue until we have a newline
+            do
+            {
+                int next = this.textReader.Read();
+                if (next < 0)
+                {
+                    // end of the input
+                    // we haven't found a newline yet, so throw an exception
+                    throw new InvalidOperationException("Line ending not found");
+                }
+
+                char nextChar = (char)next;
+                this.unconsumedChars.Enqueue(nextChar);
+
+                if (nextChar == 0x000d || 
+                    nextChar == 0x000a)
+                {
+                    // save the completed line as we have reached a new line
+                    completedLine = sb.ToString();
+
+                    // consume the characters in the queue
+                    this.position += this.unconsumedChars.Count;
+                    this.unconsumedChars.Clear();
+
+                    break;
+                }
+
+                sb.Append(nextChar);
+            }
+            while (true);
+
+            sb.Remove(0, completedLine.Length);
+
+            // scan for the end of the new line
+            do
+            {
+                int peek = this.textReader.Peek();
+                if (peek < 0)
+                {
+                    // end of input
+                    break;
+                }
+
+                char peekChar = (char)peek;
+                sb.Append(peekChar);
+
+                if (IsNewLine(sb.ToString()) == false)
+                {
+                    // we passed the new line
+                    break;
+                }
+
+                // consume the character
+                this.textReader.Read();
+                this.position++;
+            }
+            while (true);
+
+            return completedLine;
         }
 
         /// <summary>
@@ -445,10 +643,139 @@
         /// <returns>the text that matched the specified regular expression</returns>
         public string FindInLine(Regex pattern)
         {
-            throw new NotImplementedException();
+            StringBuilder sb = new StringBuilder();
+            string completedMatch;
+
+            // read in characters to our queue until we have 
+            // matched our pattern or found a newline
+            do
+            {
+                int next = this.textReader.Read();
+                if (next < 0)
+                {
+                    // end of the input
+                    // we haven't found a newline or pattern yet, so return a null
+                    return null;
+                }
+
+                char nextChar = (char)next;
+                this.unconsumedChars.Enqueue(nextChar);
+                sb.Append(nextChar);
+
+                if (nextChar == 0x000d ||
+                    nextChar == 0x000a)
+                {
+                    // we've reached a newline without a match so terminate.
+                    return null;
+                }
+
+                // do we have a match yet?
+                Match match = pattern.Match(sb.ToString());
+                if (match.Success)
+                {
+                    // we have started matching, so consume everything we've read so far.
+                    this.position += this.unconsumedChars.Count;
+                    this.unconsumedChars.Clear();
+                    this.match = match;
+                    break;                   
+                }
+            }
+            while (true);
+
+            // scan ahead for the end of the match or a newline
+            do
+            {
+                int peek = this.textReader.Peek();
+                if (peek < 0)
+                {
+                    // end of input
+                    break;
+                }
+
+                char peekChar = (char)peek;
+
+                if (peekChar == 0x000d ||
+                    peekChar == 0x000a)
+                {
+                    // we've reached a newline with a match in progress, so consume the newline
+                    // and then return.
+                    StringBuilder sbnl = new StringBuilder(2);
+                    sbnl.Append(peekChar);
+                    do
+                    {
+                        // consume the character
+                        this.textReader.Read();
+                        this.position++;
+
+                        // peek the next character
+                        peek = this.textReader.Peek();
+                        if (peek < 0)
+                        {
+                            // end of input
+                            break;
+                        }
+
+                        peekChar = (char)peek;
+                        sbnl.Append(peekChar);
+                    }
+                    while (IsNewLine(sbnl.ToString()));
+
+                    // done consuming the newline, break the loop and return the result
+                    break;
+                }
+
+                sb.Append(peekChar);
+
+                // have we stopped matching yet?
+                Match match = pattern.Match(sb.ToString());
+
+                if (match.Length != sb.Length)
+                {
+                    // we stopped matching one character ago, remove that character
+                    sb.Remove(sb.Length - 1, 1);
+                    break;
+                }
+
+                this.match = match;
+
+                // consume the character
+                this.textReader.Read();
+                this.position++;
+            }
+            while (true);
+
+            return sb.ToString();
         }
 
-        private void ReadNextToken()
+        private static bool IsNewLine(string s)
+        {
+            return s == "\n" ||
+                   s == "\r" ||
+                   s == "\r\n" ||
+                   s == Environment.NewLine;
+        }
+
+        /// <summary>
+        /// Reads from the <see cref="unconsumedChars"/> queue or 
+        /// the <see cref="textReader"/> stream.
+        /// </summary>
+        /// <returns>the next character</returns>
+        private int ReadUnconsumedInput()
+        {
+            return this.unconsumedChars.Count > 0 ? this.unconsumedChars.Dequeue() : this.textReader.Read();
+        }
+
+        /// <summary>
+        /// Peeks into the <see cref="unconsumedChars"/> queue or 
+        /// the <see cref="textReader"/> stream.
+        /// </summary>
+        /// <returns>the next character</returns>
+        private int PeekUnconsumedInput()
+        {
+            return this.unconsumedChars.Count > 0 ? this.unconsumedChars.Peek() : this.textReader.Peek();
+        }
+
+        private void ReadNextToken(Regex pattern)
         {
             StringBuilder sb = new StringBuilder();
             string completedToken;
@@ -456,8 +783,7 @@
             // read in characters until we have a match on our delimiter
             do
             {
-                int next = this.textReader.Read();
-                this.position++;
+                int next = this.ReadUnconsumedInput();
                 if (next < 0)
                 {
                     // end of the input
@@ -466,11 +792,13 @@
                     break;
                 }
 
+                this.position++;
+
                 char nextChar = (char)next;
                 sb.Append(nextChar);
 
                 // do we have a match yet?
-                Match match = this.Delimiter.Match(sb.ToString());
+                Match match = pattern.Match(sb.ToString());
                 if (match.Success)
                 {
                     // we have started matching a delimiter
@@ -493,18 +821,18 @@
             // scan ahead through the delimiter until it's consumed
             do
             {
-                int peek = this.textReader.Peek();
+                int peek = this.PeekUnconsumedInput();
                 if (peek < 0)
                 {
                     // end of input
                     break;
                 }
 
-                char nextChar = (char)peek;
-                sb.Append(nextChar);
+                char peekChar = (char)peek;
+                sb.Append(peekChar);
 
                 // have we stopped matching yet?
-                Match match = this.Delimiter.Match(sb.ToString());
+                Match match = pattern.Match(sb.ToString());
                 if (match.Length != sb.Length)
                 {
                     // end of capture
@@ -512,7 +840,7 @@
                 }
 
                 // consume the character
-                this.textReader.Read();
+                this.ReadUnconsumedInput();
                 this.position++;
             }
             while (true);
@@ -527,7 +855,7 @@
                 return this.nextToken;
             }
 
-            this.ReadNextToken();
+            this.ReadNextToken(this.Delimiter);
 
             return this.nextToken;
         }
@@ -538,7 +866,7 @@
         /// method.  The scanner does not advance past any input.
         /// </summary>
         /// <typeparam name="T">The value type that is being parsed.  Must have a TryParse member.</typeparam>
-        /// <param name="tryParse">The <c>TryParse</c> delegate.</param>
+        /// <param name="tryParse">The <c>TryParse</c> delegate.  For example <c>double.TryParse</c>.</param>
         /// <returns>
         /// true if and only if this scanner's next token is a valid double value
         /// </returns>
@@ -553,18 +881,18 @@
             }
 
             T dummy;
-            return tryParse(s, NumberStyles.Number, this.Culture, out dummy);
+            return tryParse(s, out dummy);
         }
 
         /// <summary>
         /// Scans the next token of the input as a <c>T</c>.  This
-        /// method will throw <see cref="EndOfStreamException"/> if the next
+        /// method will throw <see cref="FormatException"/> if the next
         /// token cannot be translated into a valid double value.  If the
         /// translation is successful, the scanner advances past the
         /// input that matched.
         /// </summary>
         /// <typeparam name="T">The value type that is being parsed.  Must have a TryParse member.</typeparam>
-        /// <param name="parse">The <c>Parse</c> delegate.</param>
+        /// <param name="parse">The <c>Parse</c> delegate.  For example <c>double.Parse</c>.</param>
         /// <returns>
         /// the <see cref="double"/> scanned from the input
         /// </returns>
@@ -578,10 +906,19 @@
 
             if (s == null)
             {
-                throw new EndOfStreamException();
+                throw new InvalidOperationException();
             }
 
-            T value = parse(this.nextToken, NumberStyles.Number, this.Culture);
+            T value;
+            try
+            {
+                value = parse(this.nextToken);
+            }
+            catch (FormatException ex)
+            {
+                throw new FormatException(
+                    string.Format("{0} [position={1}][token={2}]", ex.Message, this.position, this.nextToken), ex);
+            }
 
             // if the parsing throws an exception, don't advance.
             this.nextToken = null;

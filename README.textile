@@ -10,7 +10,7 @@ h2. Project Info
 
 A @TextScanner@ breaks its input into tokens using a delimiter pattern, which by default matches whitespace. The resulting tokens may then be converted into values of different types using the various next methods.
 
-This is a port of the Java class "java.util.Scanner":http://java.sun.com/javase/7/docs/api/java/util/Scanner.html to .NET.
+This is a port of the Java class "java.util.Scanner":http://java.sun.com/javase/6/docs/api/java/util/Scanner.html to .NET.
 
 h2. Breaking input into tokens
 
@@ -154,3 +154,11 @@ We can rewrite the @ScanXan@ example with @using@ and @foreach@ blocks like this
 }</code></pre>
 
 The output is the same as before.
+
+h2. License
+
+The specification is derived from Sun's specification.  See their "documentation license":http://java.sun.com/javase/6/docs/legal/license.html.
+
+The source code was written without any reference the Java library implementation or source code.
+
+The source code is licensed under "The Common Development and Distribution License (CDDL)":http://www.opensource.org/licenses/cddl1.php.
