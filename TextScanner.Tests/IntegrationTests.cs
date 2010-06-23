@@ -314,6 +314,48 @@ Down to a sunless sea.
         }
 
         [Test]
+        public void CanFindInLineAfterFail()
+        {
+            var expectedStrings = new[] { "1", "2", "red", "blue" };
+
+            string input = "1 fish 2 fish red fish blue fish";
+            using (var s = new TextScanner(input))
+            {
+                Assert.That(s.FindInLine("someword thats not there"), Is.Null);
+
+                var matchingText = s.FindInLine("(\\d+) fish (\\d+) fish (\\w+) fish (\\w+)");
+
+                // skip the overall match and get the captured group values
+                var groups = from @group in s.Match.Groups.Cast<Group>().Skip(1)
+                             select @group.Value;
+
+                Assert.That(groups, Is.EquivalentTo(expectedStrings));
+                Assert.That(matchingText, Is.EqualTo("1 fish 2 fish red fish blue"));
+                Assert.That(s.Next(), Is.EqualTo(string.Empty));
+                Assert.That(s.Next(), Is.EqualTo("fish"));
+            }
+        }
+
+        [Test]
+        public void CanTranslateTokenAfterFail()
+        {
+            string input = "18,446,744,073,709,551,615 -128";
+
+            using (var s = new TextScanner(input)
+                            .UseCulture(new CultureInfo("en-US")))
+            {
+                Assert.That(s.HasNextUInt32(), Is.False);
+                Assert.Catch<OverflowException>(() => s.NextUInt32());
+
+                Assert.That(s.HasNextUInt64(), Is.True);
+                Assert.That(s.NextUInt64(), Is.EqualTo((ulong)18446744073709551615U));
+
+                Assert.That(s.HasNextSByte(), Is.True);
+                Assert.That(s.NextSByte(), Is.EqualTo((sbyte)-128));
+            }
+        }
+
+        [Test]
         public void CanSkipLines()
         {
             string input =
@@ -325,6 +367,30 @@ Second Line, fourth statement
                 .UseDelimiter(@",\s*"))
             {
                 Assert.That(s.Next(), Is.EqualTo("First Line"));
+                Assert.That(s.NextLine(), Is.EqualTo("second statement,"));
+                Assert.That(s.Next(), Is.EqualTo("Second Line"));
+
+                Assert.That(s.NextLine(), Is.EqualTo("fourth statement"));
+
+                // there are no more line endings, so the following should throw
+                Assert.Catch<InvalidOperationException>(() => s.NextLine());
+            }
+        }
+
+        [Test]
+        public void CanSkipLineAfterTokenCheck()
+        {
+            string input =
+@"First Line, second statement,
+Second Line, fourth statement
+";
+
+            using (var s = new TextScanner(input)
+                .UseDelimiter(@",\s*"))
+            {
+                Assert.That(s.HasNextUInt32(), Is.False);
+                Assert.That(s.Next(), Is.EqualTo("First Line"));
+                Assert.That(s.HasNextUInt32(), Is.False);
                 Assert.That(s.NextLine(), Is.EqualTo("second statement,"));
                 Assert.That(s.Next(), Is.EqualTo("Second Line"));
 
@@ -374,13 +440,14 @@ Second Line, fourth statement
             TextScanner s, IEnumerable<T> expected, Func<bool> hasNextFunc, Func<T> nextFunc)
         {
             var output = new List<T>();
+            var expectedCount = expected.Count();
 
             int count = 0;
             while (hasNextFunc.Invoke())
             {
                 output.Add(nextFunc.Invoke());
 
-                Assert.That(count++ < 1000, "Took over 1000 cycles, probably means it's stuck.");
+                Assert.That(count++ < expectedCount, "Took over 1000 cycles, probably means it's stuck.");
             }
 
             Assert.That(output, Is.EquivalentTo(expected));

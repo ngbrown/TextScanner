@@ -33,7 +33,7 @@
     /// culture reardleses of whether it was previously changed.</p>
     /// <p>Ported from http://java.sun.com/javase/6/docs/api/java/util/Scanner.html</p>
     /// </remarks>
-    public class TextScanner : IDisposable, IEnumerable<string>
+    public partial class TextScanner : IDisposable, IEnumerable<string>
     {
         /// <summary>
         /// Holds characters that we are attempting to evaluate, but we don't
@@ -50,12 +50,9 @@
 
         private Regex delimiter;
 
-        private string nextToken;
-
         private int position;
 
         private Match match;
-
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TextScanner"/> class 
@@ -188,7 +185,7 @@
             return base.ToString() +
                    "[delimiters=" + this.Delimiter + "]" +
                    "[position=" + this.position + "]" +
-                   "[match valid=" + (this.nextToken != null) + "]" +
+                   "[match valid=" + this.Match.Success + "]" +
                    "[need input=" + "]" +
                    "[source closed=" + (this.textReader == null) + "]" +
                    "[skipped=" + "]" +
@@ -234,7 +231,6 @@
 
             this.Delimiter = null;
             this.culture = null;
-            this.nextToken = null;
         }
 
         /// <summary>
@@ -295,20 +291,14 @@
         /// <returns>The next token</returns>
         public string Next()
         {
-            string value;
-            if (this.nextToken == null)
-            {
-                this.ReadNextToken(this.Delimiter);
+            string value = this.ReadNextToken(true);
 
-                if (this.nextToken == null)
-                {
-                    throw new InvalidOperationException();
-                }
+            if (value == null)
+            {
+                throw new InvalidOperationException();
             }
 
-            value = this.nextToken;
             this.match = RegexSomething.Match(value);
-            this.nextToken = null;
             return value;
         }
 
@@ -547,66 +537,62 @@
         /// <returns>the line that was skipped.</returns>
         public string NextLine()
         {
+            bool consumeInput = true;
+
             StringBuilder sb = new StringBuilder();
-            string completedLine;
+            string completedLine = null;
 
             // read in characters to our queue until we have a newline
-            do
+            foreach (char c in new PeekStream(this))
             {
-                int next = this.textReader.Read();
-                if (next < 0)
-                {
-                    // end of the input
-                    // we haven't found a newline yet, so throw an exception
-                    throw new InvalidOperationException("Line ending not found");
-                }
-
-                char nextChar = (char)next;
-                this.unconsumedChars.Enqueue(nextChar);
-
-                if (nextChar == 0x000d || 
-                    nextChar == 0x000a)
+                if (c == 0x000d || 
+                    c == 0x000a)
                 {
                     // save the completed line as we have reached a new line
                     completedLine = sb.ToString();
 
-                    // consume the characters in the queue
-                    this.position += this.unconsumedChars.Count;
-                    this.unconsumedChars.Clear();
-
                     break;
                 }
 
-                sb.Append(nextChar);
+                sb.Append(c);
             }
-            while (true);
 
-            sb.Remove(0, completedLine.Length);
-
-            // scan for the end of the new line
-            do
+            if (completedLine == null)
             {
-                int peek = this.textReader.Peek();
-                if (peek < 0)
-                {
-                    // end of input
-                    break;
-                }
-
-                char peekChar = (char)peek;
-                sb.Append(peekChar);
-
-                if (IsNewLine(sb.ToString()) == false)
-                {
-                    // we passed the new line
-                    break;
-                }
-
-                // consume the character
-                this.textReader.Read();
-                this.position++;
+                // end of the input
+                // we haven't found a newline yet, so throw an exception
+                throw new InvalidOperationException("Line ending not found");
             }
-            while (true);
+
+            if (consumeInput)
+            {
+                this.ConsumeInput(completedLine.Length);
+                sb.Remove(0, completedLine.Length);
+
+                // scan for the end of the new line
+                do
+                {
+                    int peek = this.PeekUnconsumedInput();
+                    if (peek < 0)
+                    {
+                        // end of input
+                        break;
+                    }
+
+                    char peekChar = (char)peek;
+                    sb.Append(peekChar);
+
+                    if (IsNewLine(sb.ToString()) == false)
+                    {
+                        // we passed the new line
+                        break;
+                    }
+
+                    // consume the character
+                    this.ConsumeInput(1);
+                }
+                while (true);
+            }
 
             return completedLine;
         }
@@ -644,48 +630,42 @@
         public string FindInLine(Regex pattern)
         {
             StringBuilder sb = new StringBuilder();
-            string completedMatch;
+            Match localMatch = null;
 
             // read in characters to our queue until we have 
             // matched our pattern or found a newline
-            do
+            foreach (char c in new PeekStream(this))
             {
-                int next = this.textReader.Read();
-                if (next < 0)
-                {
-                    // end of the input
-                    // we haven't found a newline or pattern yet, so return a null
-                    return null;
-                }
+                sb.Append(c);
 
-                char nextChar = (char)next;
-                this.unconsumedChars.Enqueue(nextChar);
-                sb.Append(nextChar);
-
-                if (nextChar == 0x000d ||
-                    nextChar == 0x000a)
+                if (c == 0x000d ||
+                    c == 0x000a)
                 {
                     // we've reached a newline without a match so terminate.
                     return null;
                 }
-
+                
                 // do we have a match yet?
-                Match match = pattern.Match(sb.ToString());
-                if (match.Success)
+                localMatch = pattern.Match(sb.ToString());
+                if (localMatch.Success)
                 {
                     // we have started matching, so consume everything we've read so far.
-                    this.position += this.unconsumedChars.Count;
-                    this.unconsumedChars.Clear();
-                    this.match = match;
+                    this.ConsumeInput(sb.Length);
+                    this.match = localMatch;
                     break;                   
                 }
             }
-            while (true);
+
+            if (localMatch == null || localMatch.Success == false)
+            {
+                // no match was found
+                return null;
+            }
 
             // scan ahead for the end of the match or a newline
             do
             {
-                int peek = this.textReader.Peek();
+                int peek = this.PeekUnconsumedInput();
                 if (peek < 0)
                 {
                     // end of input
@@ -704,11 +684,11 @@
                     do
                     {
                         // consume the character
-                        this.textReader.Read();
+                        this.ReadUnconsumedInput();
                         this.position++;
 
                         // peek the next character
-                        peek = this.textReader.Peek();
+                        peek = this.PeekUnconsumedInput();
                         if (peek < 0)
                         {
                             // end of input
@@ -727,20 +707,19 @@
                 sb.Append(peekChar);
 
                 // have we stopped matching yet?
-                Match match = pattern.Match(sb.ToString());
+                localMatch = pattern.Match(sb.ToString());
 
-                if (match.Length != sb.Length)
+                if (localMatch.Length != sb.Length)
                 {
                     // we stopped matching one character ago, remove that character
                     sb.Remove(sb.Length - 1, 1);
                     break;
                 }
 
-                this.match = match;
+                this.match = localMatch;
 
                 // consume the character
-                this.textReader.Read();
-                this.position++;
+                this.ConsumeInput(1);
             }
             while (true);
 
@@ -765,6 +744,15 @@
             return this.unconsumedChars.Count > 0 ? this.unconsumedChars.Dequeue() : this.textReader.Read();
         }
 
+        private void ConsumeInput(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                this.ReadUnconsumedInput();
+                this.position++;
+            }
+        }
+
         /// <summary>
         /// Peeks into the <see cref="unconsumedChars"/> queue or 
         /// the <see cref="textReader"/> stream.
@@ -775,89 +763,82 @@
             return this.unconsumedChars.Count > 0 ? this.unconsumedChars.Peek() : this.textReader.Peek();
         }
 
-        private void ReadNextToken(Regex pattern)
+        private string ReadNextToken(bool consumeInput)
         {
             StringBuilder sb = new StringBuilder();
-            string completedToken;
+            string completedToken = null;
 
             // read in characters until we have a match on our delimiter
-            do
+            foreach (char c in new PeekStream(this))
             {
-                int next = this.ReadUnconsumedInput();
-                if (next < 0)
-                {
-                    // end of the input
-                    // return a null if we hadn't scanned anything yet
-                    completedToken = sb.Length > 0 ? sb.ToString() : null;
-                    break;
-                }
-
-                this.position++;
-
-                char nextChar = (char)next;
-                sb.Append(nextChar);
+                sb.Append(c);
 
                 // do we have a match yet?
-                Match match = pattern.Match(sb.ToString());
+                Match match = this.Delimiter.Match(sb.ToString());
                 if (match.Success)
                 {
                     // we have started matching a delimiter
                     // our token is just before the delimiter starts.
                     completedToken = sb.ToString(0, match.Index);
+
                     break;
                 }
-            } 
-            while (true);
+            }
 
             if (completedToken == null)
             {
-                this.nextToken = null;
-                return;
+                if (sb.Length > 0)
+                {
+                    // scan ahead was terminated by an end of stream
+                    completedToken = sb.ToString();
+                }
+                else
+                {
+                    // we hadn't read anything and we are at the end of the stream
+                    return null;
+                }
             }
 
-            // Strip the token from our StringBuilder
-            sb.Remove(0, completedToken.Length);
-
-            // scan ahead through the delimiter until it's consumed
-            do
+            if (consumeInput)
             {
-                int peek = this.PeekUnconsumedInput();
-                if (peek < 0)
+                this.ConsumeInput(sb.Length);
+
+                // Strip the token from our StringBuilder
+                sb.Remove(0, completedToken.Length);
+
+                // scan ahead through the delimiter until it's consumed);
+                do
                 {
-                    // end of input
-                    break;
+                    int peek = this.PeekUnconsumedInput();
+                    if (peek < 0)
+                    {
+                        // end of input
+                        break;
+                    }
+
+                    char peekChar = (char)peek;
+                    sb.Append(peekChar);
+
+                    // have we stopped matching yet?
+                    Match match = this.Delimiter.Match(sb.ToString());
+                    if (match.Length != sb.Length)
+                    {
+                        // end of capture
+                        break;
+                    }
+
+                    // consume the character
+                    this.ConsumeInput(1);
                 }
-
-                char peekChar = (char)peek;
-                sb.Append(peekChar);
-
-                // have we stopped matching yet?
-                Match match = pattern.Match(sb.ToString());
-                if (match.Length != sb.Length)
-                {
-                    // end of capture
-                    break;
-                }
-
-                // consume the character
-                this.ReadUnconsumedInput();
-                this.position++;
+                while (true);
             }
-            while (true);
 
-            this.nextToken = completedToken;
+            return completedToken;
         }
 
         private string PeekNextToken()
         {
-            if (this.nextToken != null)
-            {
-                return this.nextToken;
-            }
-
-            this.ReadNextToken(this.Delimiter);
-
-            return this.nextToken;
+            return this.ReadNextToken(false);
         }
 
         /// <summary>
@@ -871,7 +852,6 @@
         /// true if and only if this scanner's next token is a valid double value
         /// </returns>
         private bool HasNext<T>(TryParseDelegate<T> tryParse)
-            where T : struct
         {
             string s = this.PeekNextToken();
 
@@ -900,9 +880,8 @@
         /// If the next token matches the Float regular expression defined above then the token is converted into a double value as if by removing all locale specific prefixes, group separators, and locale specific suffixes, then mapping non-ASCII digits into ASCII digits via Character.digit, prepending a negative sign (-) if the locale specific negative prefixes and suffixes were present, and passing the resulting string to Double.parseDouble. If the token matches the localized NaN or infinity strings, then either "Nan" or "Infinity" is passed to Double.parseDouble as appropriate.
         /// </remarks>
         private T Next<T>(ParseDelegate<T> parse)
-            where T : struct
         {
-            string s = this.PeekNextToken();
+            string s = this.ReadNextToken(false);
 
             if (s == null)
             {
@@ -912,17 +891,22 @@
             T value;
             try
             {
-                value = parse(this.nextToken);
-                this.match = RegexSomething.Match(this.nextToken);
+                value = parse(s);
+                this.match = RegexSomething.Match(s);
             }
             catch (FormatException ex)
             {
                 throw new FormatException(
-                    string.Format("{0} [position={1}][token={2}]", ex.Message, this.position, this.nextToken), ex);
+                    string.Format("{0} [position={1}][token={2}]", ex.Message, this.position, s), ex);
+            }
+            catch (OverflowException ex)
+            {
+                throw new OverflowException(
+                    string.Format("{0} [position={1}][token={2}]", ex.Message, this.position, s), ex);
             }
 
-            // if the parsing throws an exception, don't advance.
-            this.nextToken = null;
+            // if the parsing did not throw an exception, then advance the stream
+            this.ReadNextToken(true);
             return value;
         }
     }
