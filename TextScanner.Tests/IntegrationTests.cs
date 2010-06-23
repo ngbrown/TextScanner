@@ -350,13 +350,14 @@ Second Line, fourth statement
             }
         }
 
-        [Test, Ignore]
+        [Test]
         public void MatchIsFilledOnNext()
         {
-            string input = "4234, a string, +3,234.32";
-
+            string input = "4234; a string; +3,234.32";
+            
             using (var s = new TextScanner(input)
-                            .UseCulture(new CultureInfo("en-US")))
+                            .UseCulture(new CultureInfo("en-US"))
+                            .UseDelimiter(";\\s*"))
             {
                 Assert.That(s.NextInt64(), Is.EqualTo(4234));
                 Assert.That(s.Match.Value, Is.EqualTo("4234"));
@@ -364,7 +365,7 @@ Second Line, fourth statement
                 Assert.That(s.Next(), Is.EqualTo("a string"));
                 Assert.That(s.Match.Value, Is.EqualTo("a string"));
 
-                Assert.That(s.HasNextDouble(), Is.EqualTo(3234.32));
+                Assert.That(s.NextDouble(), Is.EqualTo(3234.32));
                 Assert.That(s.Match.Value, Is.EqualTo("+3,234.32"));
             }
         }

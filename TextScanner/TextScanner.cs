@@ -42,6 +42,8 @@
         /// </summary>
         private readonly Queue<char> unconsumedChars = new Queue<char>();
 
+        private static readonly Regex RegexSomething = new Regex(".+");
+
         private TextReader textReader;
 
         private CultureInfo culture;
@@ -54,16 +56,17 @@
 
         private Match match;
 
+
         /// <summary>
         /// Initializes a new instance of the <see cref="TextScanner"/> class 
         /// that produces values scanned from the specified source.
         /// </summary>
-        /// <param name="textReader">
+        /// <param name="source">
         /// A character source implementing a <see cref="TextReader"/>.
         /// </param>
-        public TextScanner(TextReader textReader)
+        public TextScanner(TextReader source)
         {
-            this.textReader = textReader;
+            this.textReader = source;
 
             this.Reset();
         }
@@ -109,7 +112,7 @@
         private delegate bool TryParseDelegate<TResult>(string s, out TResult result);
 
         /// <summary>
-        /// Gets or sets the scanner's culture.
+        /// Gets the scanner's culture.
         /// </summary>
         /// <remarks>
         /// A scanner's culture affects many elements of its default primitive 
@@ -119,18 +122,18 @@
         public CultureInfo Culture 
         { 
             get { return this.culture; }
-            protected set { this.culture = value; }
+            private set { this.culture = value; }
         }
 
         /// <summary>
-        /// Gets or sets the <see cref="Regex"/> this <see cref="TextScanner"/>
+        /// Gets the <see cref="Regex"/> this <see cref="TextScanner"/>
         /// is currently using to match delimiters.
         /// </summary>
         /// <value>The scanners delimiting pattern.</value>
         public Regex Delimiter
         {
             get { return this.delimiter; }
-            protected set { this.delimiter = value; }
+            private set { this.delimiter = value; }
         }
 
         /// <summary>
@@ -293,21 +296,18 @@
         public string Next()
         {
             string value;
-            if (this.nextToken != null)
-            {
-                value = this.nextToken;
-                this.nextToken = null;
-                return value;
-            }
-
-            this.ReadNextToken(this.Delimiter);
-
             if (this.nextToken == null)
             {
-                throw new InvalidOperationException();
+                this.ReadNextToken(this.Delimiter);
+
+                if (this.nextToken == null)
+                {
+                    throw new InvalidOperationException();
+                }
             }
 
             value = this.nextToken;
+            this.match = RegexSomething.Match(value);
             this.nextToken = null;
             return value;
         }
@@ -913,6 +913,7 @@
             try
             {
                 value = parse(this.nextToken);
+                this.match = RegexSomething.Match(this.nextToken);
             }
             catch (FormatException ex)
             {
