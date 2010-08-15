@@ -185,7 +185,7 @@
             return base.ToString() +
                    "[delimiters=" + this.Delimiter + "]" +
                    "[position=" + this.position + "]" +
-                   "[match valid=" + this.Match.Success + "]" +
+                   "[match valid=" + ( this.match != null ? this.match.Success : false) + "]" +
                    "[need input=" + "]" +
                    "[source closed=" + (this.textReader == null) + "]" +
                    "[skipped=" + "]" +
@@ -262,9 +262,14 @@
         /// <returns>this scanner</returns>
         public TextScanner Reset()
         {
-            // matches any \s white space character plus the no-break space (U+00A0).
+            // Valid white space characters are members of the SpaceSeparator 
+            // category in UnicodeCategory, as well as these Unicode characters: 
+            // hexadecimal 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x0085, 0x2028, and 0x2029.
+
+            // Unicode SpaceSeparator matches any \s white space character plus the no-break space (U+00A0).
             // see http://msdn.microsoft.com/en-us/library/20bw873z.aspx#WhitespaceCharacter
-            return this.UseDelimiter(@"[\s\xA0]+")
+            // also matches 
+            return this.UseDelimiter(@"[\x09\x0A\x0B\x0C\x0D\x85\u2028\u2029\s\xA0]+")
                        .UseCulture(CultureInfo.CurrentUICulture);
         }
 
@@ -516,11 +521,19 @@
         /// advance past any input.
         /// </summary>
         /// <returns>
-        /// <c>true</c> if and only iff this scanner has another line of input
+        /// <c>true</c> if and only if this scanner has another line of input
         /// </returns>
         public bool HasNextLine()
         {
-            throw new NotImplementedException();
+            // read in characters to our queue until we have 
+            // matched our pattern or found a newline
+            foreach (char peekChar in new PeekStream(this))
+            {
+                // if there's any text left, including a newline, then we can process the next line
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -542,27 +555,30 @@
             StringBuilder sb = new StringBuilder();
             string completedLine = null;
 
+            bool isEof = true;
+
             // read in characters to our queue until we have a newline
             foreach (char c in new PeekStream(this))
             {
+                isEof = false;
+
                 if (c == 0x000d || 
                     c == 0x000a)
                 {
-                    // save the completed line as we have reached a new line
-                    completedLine = sb.ToString();
-
                     break;
                 }
 
                 sb.Append(c);
             }
 
-            if (completedLine == null)
+            if (isEof)
             {
                 // end of the input
                 // we haven't found a newline yet, so throw an exception
                 throw new InvalidOperationException("Line ending not found");
             }
+
+            completedLine = sb.ToString();
 
             if (consumeInput)
             {
@@ -768,18 +784,46 @@
             StringBuilder sb = new StringBuilder();
             string completedToken = null;
 
+            bool preMatchDone = false;
+            int skipped = 0;
+
             // read in characters until we have a match on our delimiter
             foreach (char c in new PeekStream(this))
             {
                 sb.Append(c);
 
+                if (preMatchDone == false)
+                {
+                    // if we are at a delimiter at the beginning of our string, then skip it.
+                    Match matchPre = this.Delimiter.Match(sb.ToString());
+                    if (matchPre.Success && matchPre.Index == 0)
+                    {
+                        if (matchPre.Length == sb.Length)
+                        {
+                            // still matching
+                            skipped = sb.Length;
+                            continue;
+                        }
+                        else
+                        {
+                            preMatchDone = true;
+                            skipped = sb.Length - 1;
+                        }
+                    }
+                    else
+                    {
+                        ////preMatchDone = true;
+                        skipped = 0;
+                    }
+                }
+
                 // do we have a match yet?
-                Match match = this.Delimiter.Match(sb.ToString());
+                Match match = this.Delimiter.Match(sb.ToString(skipped, sb.Length - skipped));
                 if (match.Success)
                 {
                     // we have started matching a delimiter
                     // our token is just before the delimiter starts.
-                    completedToken = sb.ToString(0, match.Index);
+                    completedToken = sb.ToString(skipped, match.Index);
 
                     break;
                 }
@@ -787,10 +831,10 @@
 
             if (completedToken == null)
             {
-                if (sb.Length > 0)
+                if (sb.Length - skipped > 0)
                 {
                     // scan ahead was terminated by an end of stream
-                    completedToken = sb.ToString();
+                    completedToken = sb.ToString(skipped, sb.Length - skipped);
                 }
                 else
                 {
@@ -801,36 +845,7 @@
 
             if (consumeInput)
             {
-                this.ConsumeInput(sb.Length);
-
-                // Strip the token from our StringBuilder
-                sb.Remove(0, completedToken.Length);
-
-                // scan ahead through the delimiter until it's consumed);
-                do
-                {
-                    int peek = this.PeekUnconsumedInput();
-                    if (peek < 0)
-                    {
-                        // end of input
-                        break;
-                    }
-
-                    char peekChar = (char)peek;
-                    sb.Append(peekChar);
-
-                    // have we stopped matching yet?
-                    Match match = this.Delimiter.Match(sb.ToString());
-                    if (match.Length != sb.Length)
-                    {
-                        // end of capture
-                        break;
-                    }
-
-                    // consume the character
-                    this.ConsumeInput(1);
-                }
-                while (true);
+                this.ConsumeInput(completedToken.Length + skipped);
             }
 
             return completedToken;

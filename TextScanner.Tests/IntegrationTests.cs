@@ -53,7 +53,7 @@
 @"to",
 @"a",
 @"sunless",
-@"sea."
+@"sea.",
 };
             using (var s = new TextScanner(new StreamReader("xanadu.txt")))
             {
@@ -273,11 +273,11 @@ Down to a sunless sea.
         }
 
         [Test]
-        public void DoesntConsumeSpacesAtBeginning()
+        public void ConsumeSpacesAtBeginning()
         {
+            // verified the following with a java sample.
             var expectedStrings = new[]
 {
-@"",
 @"string",
 @"with",
 @"extra",
@@ -306,9 +306,9 @@ Down to a sunless sea.
                 var groups = from @group in s.Match.Groups.Cast<Group>().Skip(1)
                              select @group.Value;
 
+                // verified the following with a java sample.
                 Assert.That(groups, Is.EquivalentTo(expectedStrings));
                 Assert.That(matchingText, Is.EqualTo("1 fish 2 fish red fish blue"));
-                Assert.That(s.Next(), Is.EqualTo(string.Empty));
                 Assert.That(s.Next(), Is.EqualTo("fish"));
             }
         }
@@ -331,7 +331,6 @@ Down to a sunless sea.
 
                 Assert.That(groups, Is.EquivalentTo(expectedStrings));
                 Assert.That(matchingText, Is.EqualTo("1 fish 2 fish red fish blue"));
-                Assert.That(s.Next(), Is.EqualTo(string.Empty));
                 Assert.That(s.Next(), Is.EqualTo("fish"));
             }
         }
@@ -367,10 +366,10 @@ Second Line, fourth statement
                 .UseDelimiter(@",\s*"))
             {
                 Assert.That(s.Next(), Is.EqualTo("First Line"));
-                Assert.That(s.NextLine(), Is.EqualTo("second statement,"));
+                Assert.That(s.NextLine(), Is.EqualTo(", second statement,"));
                 Assert.That(s.Next(), Is.EqualTo("Second Line"));
 
-                Assert.That(s.NextLine(), Is.EqualTo("fourth statement"));
+                Assert.That(s.NextLine(), Is.EqualTo(", fourth statement"));
 
                 // there are no more line endings, so the following should throw
                 Assert.Catch<InvalidOperationException>(() => s.NextLine());
@@ -388,13 +387,14 @@ Second Line, fourth statement
             using (var s = new TextScanner(input)
                 .UseDelimiter(@",\s*"))
             {
+                // verified the following with a java sample.
                 Assert.That(s.HasNextUInt32(), Is.False);
                 Assert.That(s.Next(), Is.EqualTo("First Line"));
                 Assert.That(s.HasNextUInt32(), Is.False);
-                Assert.That(s.NextLine(), Is.EqualTo("second statement,"));
+                Assert.That(s.NextLine(), Is.EqualTo(", second statement,"));
                 Assert.That(s.Next(), Is.EqualTo("Second Line"));
 
-                Assert.That(s.NextLine(), Is.EqualTo("fourth statement"));
+                Assert.That(s.NextLine(), Is.EqualTo(", fourth statement"));
 
                 // there are no more line endings, so the following should throw
                 Assert.Catch<InvalidOperationException>(() => s.NextLine());
@@ -402,7 +402,7 @@ Second Line, fourth statement
         }
 
         [Test]
-        public void AttemptingToSkipLineWithNoLinebreakDoesntAdvancePosition()
+        public void CallingNextAtEndOfLineThrowsException()
         {
             string input = @"First line, second statement, third statement";
 
@@ -410,9 +410,8 @@ Second Line, fourth statement
                             .UseDelimiter(@",\s*"))
             {
                 Assert.That(s.Next(), Is.EqualTo("First line"));
-                Assert.Catch<InvalidOperationException>(() => s.NextLine());
-                Assert.That(s.Next(), Is.EqualTo("second statement"));
-                Assert.That(s.HasNext(), Is.True);
+                Assert.That(s.NextLine(), Is.EqualTo(", second statement, third statement"));
+                Assert.Catch<InvalidOperationException>(() => s.Next());
             }
         }
 
@@ -436,6 +435,37 @@ Second Line, fourth statement
             }
         }
 
+        [Test]
+        public void CanCheckHasNextLine()
+        {
+            string input =
+@"First line
+4453
+Last line";
+
+            using (var s = new TextScanner(input))
+            {
+                // verified the following with a java sample.
+                Assert.That(s.HasNextLine(), Is.True);
+
+                Assert.That(s.NextLine(), Is.EqualTo("First line"));
+                Assert.That(s.ToString(), Contains.Substring("position=12"));
+
+                Assert.That(s.HasNextLine(), Is.True);
+                Assert.That(s.NextDouble(), Is.EqualTo(4453.0));
+                Assert.That(s.ToString(), Contains.Substring("position=16"));
+
+                Assert.That(s.HasNextLine(), Is.True);
+                Assert.That(s.NextLine(), Is.EqualTo(""));
+                Assert.That(s.ToString(), Contains.Substring("position=18"));
+
+                Assert.That(s.HasNextLine(), Is.True);
+                Assert.That(s.NextLine(), Is.EqualTo("Last line"));
+                Assert.That(s.HasNextLine(), Is.False);
+                Assert.Catch(() => s.NextLine());
+            }
+        }
+
         private static void ScannerEquivalentTest<T>(
             TextScanner s, IEnumerable<T> expected, Func<bool> hasNextFunc, Func<T> nextFunc)
         {
@@ -447,7 +477,7 @@ Second Line, fourth statement
             {
                 output.Add(nextFunc.Invoke());
 
-                Assert.That(count++ < expectedCount, "Took over 1000 cycles, probably means it's stuck.");
+                Assert.That(count++ < expectedCount, "Took over " + expectedCount + " cycles, probably means it's stuck.");
             }
 
             Assert.That(output, Is.EquivalentTo(expected));

@@ -1,15 +1,18 @@
 import java.io.*;
 import java.util.Scanner;
 
-public class ScanXan {
+public class ScanXanToArray {
     public static void main(String[] args) throws IOException {
         Scanner s = null;
         try {
-            s = new Scanner(new BufferedReader(new FileReader("xanadu.txt")));
-
+            s = new Scanner("string with  extra spaces ");
+            s.useDelimiter("\\s");
+            
+            System.out.println("{");
             while (s.hasNext()) {
-                System.out.println("\"" + s.next() + "\"");
+                System.out.println("@\"" + s.next() + "\",");
             }
+            System.out.println("};");
         } finally {
             if (s != null) {
                 s.close();

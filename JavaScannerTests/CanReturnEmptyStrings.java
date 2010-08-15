@@ -1,11 +1,11 @@
 import java.io.*;
 import java.util.Scanner;
 
-public class ScanXan {
+public class CanReturnEmptyStrings {
     public static void main(String[] args) throws IOException {
         Scanner s = null;
         try {
-            s = new Scanner(new BufferedReader(new FileReader("xanadu.txt")));
+            s = new Scanner("string with  extra spaces ");
 
             while (s.hasNext()) {
                 System.out.println("\"" + s.next() + "\"");
