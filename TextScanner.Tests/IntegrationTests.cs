@@ -314,6 +314,27 @@ Down to a sunless sea.
         }
 
         [Test]
+        public void CanFindInLineToEnd()
+        {
+            var expectedStrings = new[] { "1", "2", "red", "blue" };
+
+            string input = "1 fish 2 fish red fish blue fish";
+            using (var s = new TextScanner(input))
+            {
+                var matchingText = s.FindInLine(@"^((?<Kind>[^\s]+) fish\s*)+$");
+
+                // skip the overall match and get the captured group values
+                var groups = (from @group in s.Match.Groups["Kind"].Captures.Cast<Capture>()
+                             select @group.Value).ToArray();
+
+                // verified the following with a java sample.
+                Assert.That(matchingText, Is.EqualTo("1 fish 2 fish red fish blue fish"));
+                Assert.That(groups, Is.EquivalentTo(expectedStrings));
+            }
+            
+        }
+
+        [Test]
         public void CanFindInLineAfterFail()
         {
             var expectedStrings = new[] { "1", "2", "red", "blue" };
@@ -369,7 +390,9 @@ Second Line, fourth statement
                 Assert.That(s.NextLine(), Is.EqualTo(", second statement,"));
                 Assert.That(s.Next(), Is.EqualTo("Second Line"));
 
-                Assert.That(s.NextLine(), Is.EqualTo(", fourth statement"));
+                Assert.That(s.FindInLine(@"^[a-z, ]+$"), Is.EqualTo(", fourth statement"));
+
+                Assert.That(s.HasNextLine(), Is.False);
 
                 // there are no more line endings, so the following should throw
                 Assert.Catch<InvalidOperationException>(() => s.NextLine());
@@ -463,6 +486,23 @@ Last line";
                 Assert.That(s.NextLine(), Is.EqualTo("Last line"));
                 Assert.That(s.HasNextLine(), Is.False);
                 Assert.Catch(() => s.NextLine());
+            }
+        }
+
+        [Test]
+        public void CanSkipBlankLines()
+        {
+            string input =
+@"word
+
+words
+";
+
+            using (var s = new TextScanner(input))
+            {
+                Assert.That(s.FindInLine(@"^\w+$"), Is.EqualTo("word"));
+                Assert.That(s.FindInLine(@"^\w+$"), Is.EqualTo("words"));
+                Assert.That(s.HasNextLine(), Is.False);
             }
         }
 

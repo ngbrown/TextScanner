@@ -153,7 +153,7 @@
             {
                 if (this.match == null)
                 {
-                    throw new InvalidOperationException();
+                    throw new InvalidOperationException("No match result available");
                 }
 
                 return this.match;
@@ -637,7 +637,7 @@
         /// is unchanged.  This method may block waiting for input that matches the pattern.
         /// </summary>
         /// <remarks>
-        /// Since this method continues to seach through the input looking for the specified
+        /// Since this method continues to search through the input looking for the specified
         /// pattern, it may buffer all of the input searching for the desired token if no
         /// line separators are present.
         /// </remarks>
@@ -657,19 +657,18 @@
                 if (c == 0x000d ||
                     c == 0x000a)
                 {
-                    // we've reached a newline without a match so terminate.
-                    return null;
+                    // we've reached a newline so terminate.
+                    break;
                 }
-                
+
                 // do we have a match yet?
                 localMatch = pattern.Match(sb.ToString());
-                if (localMatch.Success)
-                {
-                    // we have started matching, so consume everything we've read so far.
-                    this.ConsumeInput(sb.Length);
-                    this.match = localMatch;
-                    break;                   
-                }
+            }
+
+            if (localMatch != null && localMatch.Success)
+            {
+                this.match = localMatch;
+                this.ConsumeInput(localMatch.Index + localMatch.Length);
             }
 
             if (localMatch == null || localMatch.Success == false)
@@ -679,67 +678,44 @@
             }
 
             // scan ahead for the end of the match or a newline
-            do
+
+            int peek = this.PeekUnconsumedInput();
+            if (peek < 0)
             {
-                int peek = this.PeekUnconsumedInput();
-                if (peek < 0)
-                {
-                    // end of input
-                    break;
-                }
-
-                char peekChar = (char)peek;
-
-                if (peekChar == 0x000d ||
-                    peekChar == 0x000a)
-                {
-                    // we've reached a newline with a match in progress, so consume the newline
-                    // and then return.
-                    StringBuilder sbnl = new StringBuilder(2);
-                    sbnl.Append(peekChar);
-                    do
-                    {
-                        // consume the character
-                        this.ReadUnconsumedInput();
-                        this.position++;
-
-                        // peek the next character
-                        peek = this.PeekUnconsumedInput();
-                        if (peek < 0)
-                        {
-                            // end of input
-                            break;
-                        }
-
-                        peekChar = (char)peek;
-                        sbnl.Append(peekChar);
-                    }
-                    while (IsNewLine(sbnl.ToString()));
-
-                    // done consuming the newline, break the loop and return the result
-                    break;
-                }
-
-                sb.Append(peekChar);
-
-                // have we stopped matching yet?
-                localMatch = pattern.Match(sb.ToString());
-
-                if (localMatch.Length != sb.Length)
-                {
-                    // we stopped matching one character ago, remove that character
-                    sb.Remove(sb.Length - 1, 1);
-                    break;
-                }
-
-                this.match = localMatch;
-
-                // consume the character
-                this.ConsumeInput(1);
+                // end of input
+                return this.match.Value;
             }
-            while (true);
 
-            return sb.ToString();
+            char peekChar = (char)peek;
+
+            if (peekChar == 0x000d ||
+                peekChar == 0x000a)
+            {
+                // we've reached a newline with a match in progress, so consume the newline
+                // and then return.
+                StringBuilder sbnl = new StringBuilder(2);
+                sbnl.Append(peekChar);
+                do
+                {
+                    // consume the character
+                    this.ReadUnconsumedInput();
+                    this.position++;
+
+                    // peek the next character
+                    peek = this.PeekUnconsumedInput();
+                    if (peek < 0)
+                    {
+                        // end of input
+                        break;
+                    }
+
+                    peekChar = (char)peek;
+                    sbnl.Append(peekChar);
+                }
+                while (IsNewLine(sbnl.ToString()));
+            }
+
+            return match.Value;
         }
 
         private static bool IsNewLine(string s)
