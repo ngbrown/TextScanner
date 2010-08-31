@@ -184,7 +184,7 @@
         {
             return base.ToString() +
                    "[delimiters=" + this.Delimiter + "]" +
-                   "[position=" + this.position + "]" +
+                   "[position=0x" + this.position.ToString("X") + "]" +
                    "[match valid=" + ( this.match != null ? this.match.Success : false) + "]" +
                    "[need input=" + "]" +
                    "[source closed=" + (this.textReader == null) + "]" +
