@@ -1,11 +1,11 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{D35FA256-2586-4D64-942D-52523EE003EF}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TextScanner", "TextScanner\TextScanner.csproj", "{5A433775-FB7A-4F78-BB3E-E19DEBD53E37}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TextScanner.Tests", "TextScanner.Tests\TextScanner.Tests.csproj", "{7C518509-0B3E-40F4-B0C0-09164D788858}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Examples", "Examples", "{D35FA256-2586-4D64-942D-52523EE003EF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScanXan", "Examples\ScanXan\ScanXan.csproj", "{9E65AD6A-DB13-4B71-8CB1-14FEEAA31B80}"
 EndProject
